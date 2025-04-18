@@ -5,6 +5,7 @@ import sys
 import heapq
 import math
 import random # For random spawning
+from collections import deque
 
 # Constants
 WIDTH, HEIGHT = 800, 800
@@ -145,12 +146,18 @@ class Intersection:
 
     def update(self):
         pass
-
+    
+    def can_car_enter(self, car):
+        """
+        Parent method to check if a car can enter the intersection. Should be overridden by subclasses.
+        Returns True if the car can enter, False otherwise.
+        """
+        return True
 
     def draw(self, win):
         pass
 
-    def get_next_target_position(self, start_extremity, current_target_index):
+    def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
         #return next_target_pos, is_last_pos
         pass
         
@@ -161,11 +168,15 @@ class ClassicRoundabout(Intersection):
         self.center = Vec2(pos)
         self.nb_lanes = 1
 
+        self.nb_target_to_check_before_enter = 2
+
         self.exits = []
         for exit_dir in exits_dir:
             self.exits.append(RoadExtremity(self.simulator, (self.center.x + self.radius * exit_dir.x, self.center.y + self.radius * exit_dir.y), self))
 
         self.targets = self.get_evenly_spaced_points(14)[::-1]
+
+        self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
     
 
     def get_yield_point(self, car):
@@ -211,17 +222,35 @@ class ClassicRoundabout(Intersection):
                 closest_target_id = id
         return closest_target_id
         
-
-    def get_next_target_position(self, start_extremity, exit_extremity, current_target_index):
-        start_target_index = (self.closest_target(start_extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)%len(self.targets)
-        exit_target_index = (self.closest_target(exit_extremity.get_start_car_pos_dir()[0])-1)%len(self.targets)
-        target_index = (start_target_index+current_target_index)%len(self.targets)
+    def get_index(self, i):
+        return i%len(self.targets)
+    def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
+        """ returns the position of the current_target_index based on an extremity """
+        start_target_index = self.get_index(self.closest_target(start_extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)
+        exit_target_index = self.get_index(self.closest_target(exit_extremity.get_start_car_pos_dir()[0])-1)
+        target_index = self.get_index(start_target_index+current_target_index)
+        if car:
+            btw_index = self.get_index(target_index-1)
+            if car in self.cars_between_targets[self.get_index(btw_index-1)]:
+                self.cars_between_targets[self.get_index(btw_index-1)].remove(car)
+            if target_index != exit_target_index:
+                self.cars_between_targets[btw_index].append(car)
         return self.targets[target_index], exit_target_index == target_index
-        
+    
+    def can_car_enter(self, extremity):
+        """
+        Returns True if there is enough space for the car to enter the roundabout (no car within min_distance meters).
+        """
+        start_target_index = self.get_index(self.closest_target(extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)
+        for i in range(self.nb_target_to_check_before_enter):
+            btw_index = self.get_index(start_target_index - i - 1)
+            if self.cars_between_targets[btw_index]:
+                return False
+        return True
 
 class Car:
     
-    def __init__(self, simulator, path):
+    def __init__(self, simulator, path, car_image=None):
         self.simulator = simulator
 
         self.pos,self.dir = path[0].get_start_car_pos_dir()
@@ -249,8 +278,11 @@ class Car:
         self.current_target_index = 0
 
         # Image
-        self.car_image = pygame.image.load("Assets/"+random.choice(os.listdir("Assets")))
-        self.car_image = pygame.transform.scale(self.car_image, (40, 40))
+        if car_image is not None:
+            self.car_image = car_image.copy()
+        else:
+            self.car_image = pygame.Surface((40, 40))
+            self.car_image.fill((255, 0, 0))
         self.car_width = self.car_image.get_width() if self.car_image else 40
         self.car_height = self.car_image.get_height() if self.car_image else 40
 
@@ -311,7 +343,11 @@ class Car:
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
             distance = target_vector.length()
-            if distance > self.speed*5: # Éviter la division par zéro ou comportement erratique si trop proche
+            if distance < self.speed*20 and distance >= self.speed*5 and self.status == "APPROACHING": # Getting close to intersection
+                self.acceleration = -self.engine_force*2
+                
+            elif distance > self.speed*5: # target position not reached
+
                 target_dir = target_vector.normalize()
                 # Tourner progressivement vers la cible
                 angle = self.dir.angle_to(target_dir)
@@ -340,8 +376,11 @@ class Car:
                     self.acceleration -= pygame.math.lerp(0, self.engine_force*10, self.speed/self.max_speed)
             else:
                 self.acceleration = self.engine_force
-
+        else:
+            self.acceleration = -self.engine_force*2
+            self.current_target_position = self.get_next_target_position()
             
+
         # --- Mise à jour de la position ---
         self.speed += self.acceleration
         self.speed = max(0, min(self.speed, self.max_speed))
@@ -365,7 +404,7 @@ class Car:
         
         elif self.status=="INTERSECTION":  # is in intersection
 
-            next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index)
+            next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index, car=self)
             
             self.current_target_index += 1
             if is_last_pos:
@@ -374,11 +413,15 @@ class Car:
                 
             return next_target_pos
         elif self.status == "APPROACHING":
-            self.last_extremity = self.current_target_extremity
-            self.current_target_extremity = self.get_next_target_extremity()
-            next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index)
-            self.status = "INTERSECTION"
-            return next_target_pos
+            if self.current_target_extremity.intersection.can_car_enter(self.last_extremity): 
+                self.last_extremity = self.current_target_extremity
+                self.current_target_extremity = self.get_next_target_extremity()
+                next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index, car=self)
+                self.current_target_index += 1
+                self.status = "INTERSECTION"
+                return next_target_pos
+            else:
+                return None
 
         elif self.status=="EXITING":
             self.last_extremity = self.current_target_extremity
@@ -405,7 +448,8 @@ class Car:
         win.blit(rotated_car_image, new_rect.topleft)
 
         if DEBUG:
-            pygame.draw.circle(win, (0, 0, 255), self.current_target_position, 5)
+            if self.current_target_position:
+                pygame.draw.circle(win, (0, 0, 255), self.current_target_position, 5)
             if True: # Si vous avez un mode debug
                 start_point = self.pos
                 # Calcul des points limites du cône de détection
@@ -420,6 +464,26 @@ class Car:
 class Simulator:
     INTERSECTION_COST = 10.0 # Define a cost for traversing an intersection (adjust as needed)
 
+    def _preload_car_images(self):
+        """Preload and scale all car images once. Returns a list of surfaces."""
+        assets_dir = "Assets"
+        images = []
+        if os.path.isdir(assets_dir):
+            for fname in os.listdir(assets_dir):
+                fpath = os.path.join(assets_dir, fname)
+                try:
+                    img = pygame.image.load(fpath)
+                    img = pygame.transform.scale(img, (40, 40))
+                    images.append(img)
+                except Exception as e:
+                    print(f"Warning: Could not load car image {fpath}: {e}")
+        if not images:
+            # Fallback: create a dummy surface
+            img = pygame.Surface((40, 40))
+            img.fill((255, 0, 0))
+            images.append(img)
+        return images
+
     def __init__(self):
         self.win = pygame.display.set_mode((WIDTH, HEIGHT))
         pygame.display.set_caption("Roundabout Simulator")
@@ -430,10 +494,10 @@ class Simulator:
 
         ext1 = RoadExtremity(self, (0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=60)
         # Ensure the intersection exits are used correctly when creating roads
-        ext2 = RoadExtremity(self, (WIDTH, HEIGHT//2), spawn_cars=True, spawn_cars_timer=120)
+        ext2 = RoadExtremity(self, (WIDTH, HEIGHT//2), spawn_cars=False, spawn_cars_timer=60)
 
-        ext_3 = RoadExtremity(self, (WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=120)
-        ext_4 = RoadExtremity(self, (WIDTH//2, HEIGHT), spawn_cars=True, spawn_cars_timer=120)
+        ext_3 = RoadExtremity(self, (WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=60)
+        ext_4 = RoadExtremity(self, (WIDTH//2, HEIGHT), spawn_cars=False, spawn_cars_timer=60)
         
 
         # Assuming intersection.exits[0] connects to ext1 and intersection.exits[1] connects to ext2
@@ -452,10 +516,53 @@ class Simulator:
              self.all_extremities.add(road.end_extremity)
         # --- End of existing setup ---
 
+
+        self._neighbor_map = None
+
+        # Precompute neighbor map for fast pathfinding
+        self._build_neighbor_map()
+
         self.cars = []
 
+        # Preload car images once
+        self.preloaded_car_images = self._preload_car_images()
 
         self.run()
+
+    def _build_neighbor_map(self):
+        """
+        Precompute a mapping from each RoadExtremity to its set of neighbor RoadExtremities.
+        This should be called after roads and intersections are set up.
+        """
+        neighbor_map = dict()
+        # Collect all extremities
+        all_extremities = set()
+        for road in self.roads:
+            all_extremities.add(road.start_extremity)
+            all_extremities.add(road.end_extremity)
+        for intersection in self.intersections:
+            for exit_extremity in intersection.exits:
+                all_extremities.add(exit_extremity)
+        # Build neighbors
+        for ext in all_extremities:
+            neighbors = set()
+            # Across the road
+            if ext.road:
+                other = ext.get_other_extremity()
+                if other:
+                    neighbors.add(other)
+            # Across the intersection
+            if ext.intersection:
+                for neighbor in ext.intersection.exits:
+                    if neighbor is not ext:
+                        neighbors.add(neighbor)
+            neighbor_map[ext] = neighbors
+        self._neighbor_map = neighbor_map
+        self._all_extremities = all_extremities
+
+    def rebuild_neighbor_map(self):
+        """Public method to rebuild neighbors if roads/intersections change."""
+        self._build_neighbor_map()
 
     def run(self):
         global DEBUG
@@ -495,137 +602,61 @@ class Simulator:
 
     def generate_path(self, start_extremity, end_extremity):
         """
-        Generates the shortest path between two RoadExtremity objects using Dijkstra's algorithm,
-        adjusting the path for intersection U-turns.
-        # ... (rest of docstring)
+        Fast BFS using precomputed neighbor map. Finds shortest path (fewest hops) between extremities.
+        Adjusts path for intersection U-turns.
         """
-        # 1. Gather nodes (no changes)
-        all_nodes = set()
-        for road in self.roads:
-            all_nodes.add(road.start_extremity)
-            all_nodes.add(road.end_extremity)
-        for intersection in self.intersections:
-             for exit_extremity in intersection.exits:
-                 all_nodes.add(exit_extremity)
-
-
-        # 2. Initialize Dijkstra's structures
-        distances = {node: math.inf for node in all_nodes}
-        previous_nodes = {node: None for node in all_nodes}
-        distances[start_extremity] = 0
-
-        # Initialize a counter for tie-breaking in the priority queue
-        entry_count = 0
-        priority_queue = [(0, entry_count, start_extremity)] # (distance, count, node)
-        entry_count += 1
-
-        # 3. Dijkstra's Algorithm
-        while priority_queue:
-            # Pop the element with the smallest distance, ignore the counter
-            current_distance, _, current_node = heapq.heappop(priority_queue)
-
-            # Optimization: If we've found a shorter path already, skip
-            if current_distance > distances[current_node]:
-                continue
-
-            # If we reached the destination
+        neighbor_map = self._neighbor_map
+        visited = set()
+        previous_nodes = dict()
+        queue = deque()
+        queue.append(start_extremity)
+        visited.add(start_extremity)
+        found = False
+        while queue:
+            current_node = queue.popleft()
             if current_node == end_extremity:
-                break # Path found
-
-            # --- Explore neighbors ---
-
-            # Neighbor across the current node's road
-            if current_node.road:
-                other_road_extremity = current_node.get_other_extremity()
-                if other_road_extremity:
-                    cost = current_node.road.length
-                    neighbor = other_road_extremity
-                    # Check if neighbor exists in our collected nodes (should always if setup is correct)
-                    if neighbor in distances:
-                        new_distance = distances[current_node] + cost
-                        if new_distance < distances[neighbor]:
-                            distances[neighbor] = new_distance
-                            previous_nodes[neighbor] = current_node
-                            heapq.heappush(priority_queue, (new_distance, entry_count, neighbor))
-                            entry_count += 1 # Increment counter
-
-            # Neighbors across the intersection (if the node is part of an intersection)
-            if current_node.intersection:
-                cost = self.INTERSECTION_COST
-                for neighbor in current_node.intersection.exits:
-                    # Check if neighbor exists in our collected nodes
-                    if neighbor in distances:
-                        # Allow pathing to other exits or U-turn via the same exit
-                        # Note: Dijkstra logic handles not going back immediately unless optimal
-                        new_distance = distances[current_node] + cost
-                        if new_distance < distances[neighbor]:
-                             distances[neighbor] = new_distance
-                             previous_nodes[neighbor] = current_node
-                             heapq.heappush(priority_queue, (new_distance, entry_count, neighbor))
-                             entry_count += 1 # Increment counter
-
-
-        # --- 4. Reconstruct path ---
+                found = True
+                break
+            for neighbor in neighbor_map.get(current_node, []):
+                if neighbor not in visited:
+                    visited.add(neighbor)
+                    previous_nodes[neighbor] = current_node
+                    queue.append(neighbor)
+        # Reconstruct path
         path_nodes = []
         current = end_extremity
-        if previous_nodes.get(current) is None and current != start_extremity: # Use .get for safety
+        if not found and current != start_extremity:
             print(f"Warning: Path not found from start {id(start_extremity)} to end {id(end_extremity)}")
             return []
-
         while current is not None:
             path_nodes.append(current)
-            # Basic cycle detection during reconstruction
-            next_node_in_recon = previous_nodes.get(current) # Use .get
+            next_node_in_recon = previous_nodes.get(current)
             if next_node_in_recon in path_nodes:
-                 print(f"Error: Path reconstruction cycle detected near node id={id(current)}")
-                 # Avoid infinite loop, return potentially incomplete path or empty
-                 return []
+                print(f"Error: Path reconstruction cycle detected near node id={id(current)}")
+                return []
             current = next_node_in_recon
-
-
         if not path_nodes or path_nodes[-1] != start_extremity:
-             print(f"Warning: Path reconstruction failed for start {id(start_extremity)} to end {id(end_extremity)}")
-             # Check if path_nodes is not empty before accessing [-1]
-             if path_nodes and path_nodes[-1] != start_extremity:
-                  print(f"  -> Path ends at {id(path_nodes[-1])} instead of {id(start_extremity)}")
-             return []
-
-        # Reverse to get the standard path order: [start, node2, ..., end]
+            print(f"Warning: Path reconstruction failed for start {id(start_extremity)} to end {id(end_extremity)}")
+            if path_nodes and path_nodes[-1] != start_extremity:
+                print(f"  -> Path ends at {id(path_nodes[-1])} instead of {id(start_extremity)}")
+            return []
         ordered_nodes = path_nodes[::-1]
-
-        # --- 5. Correct Path for Intersection U-Turns ---
-        # If the path is A -> B -> A, where B is an intersection node, change it to A -> B -> B -> A.
+        # Correct Path for Intersection U-Turns (same as before)
         final_path_corrected = []
         if not ordered_nodes:
             return []
-
-        final_path_corrected.append(ordered_nodes[0]) # Add the first node
-
+        final_path_corrected.append(ordered_nodes[0])
         i = 0
         while i < len(ordered_nodes) - 1:
             prev_node = ordered_nodes[i]
             curr_node = ordered_nodes[i+1]
-
-            final_path_corrected.append(curr_node) # Always add the current node
-
-            # Check if a U-turn pattern exists: prev -> curr -> next (where next == prev)
-            # And ensure the turnaround node 'curr' is actually part of an intersection.
+            final_path_corrected.append(curr_node)
             if i + 2 < len(ordered_nodes):
                 next_node = ordered_nodes[i+2]
                 if next_node == prev_node and curr_node.intersection is not None:
-                    # Found pattern A -> B -> A where B is in an intersection.
-                    # Insert B again right after the first B.
-                    final_path_corrected.append(curr_node) # Add the duplicate
-                    # Skip the next node in the original list as we've processed the A->B->A triplet
+                    final_path_corrected.append(curr_node)
                     i += 1
-
-            i += 1 # Move to the next node
-
-
-        # Debugging print (optional)
-        # print(f"Original path nodes: {[id(n) for n in ordered_nodes]}")
-        # print(f"Corrected path nodes: {[id(n) for n in final_path_corrected]}")
-
+            i += 1
         return final_path_corrected
 
 
@@ -660,7 +691,8 @@ class Simulator:
         path = self.generate_path(start_extremity, end_extremity)
 
         if path: # Only spawn if a path exists
-            new_car = Car(self, path) # Pass the end_extremity
+            car_img = random.choice(self.preloaded_car_images)
+            new_car = Car(self, path, car_img)
             # It seems the Car class already calls generate_path internally,
             # ensure it uses the passed end_extremity or remove the internal call.
             # Let's assume Car uses the provided final_target_extremity.
