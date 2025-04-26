@@ -42,6 +42,7 @@ class Simulator:
         self.preloaded_car_images = self._preload_car_images()
 
         self.debug = False
+        self.selected_car = None # Track the currently selected car
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
         # --- Your existing setup code ---
@@ -117,7 +118,24 @@ class Simulator:
         for event in events:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
-                    pass
+                    self.debug = not self.debug # Toggle debug mode
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1: # Left click
+                    clicked_car = None
+                    for car in self.cars:
+                        if car.handle_click(event.pos):
+                            clicked_car = car
+                            break # Found a clicked car, no need to check others
+
+                    # Deselect the previously selected car
+                    if self.selected_car:
+                        self.selected_car.selected = False
+
+                    # Select the clicked car if any
+                    self.selected_car = clicked_car
+                    if self.selected_car:
+                        self.selected_car.selected = True
+
 
         self.win.fill(BACKGROUND_COLOR)
 

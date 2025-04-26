@@ -34,7 +34,7 @@ class ClassicRoundabout(Intersection):
         self.center = Vec2(pos)
         self.nb_lanes = 1
 
-        self.nb_target_to_check_before_enter = 2
+        self.nb_target_to_check_before_enter = 3
 
         self.exits = []
         for exit_dir in exits_dir:
