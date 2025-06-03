@@ -21,10 +21,10 @@ class Car:
         self.engine_force = 0.05  
         self.steering_speed = 5
 
-        self.alpha = 4
+        self.alpha = 5 # Increased alpha for stronger obstacle avoidance response
         self.beta = 3
         self.max_acceleration = 0.006
-        self.max_deceleration = 0.02
+        self.max_deceleration = 0.03 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -61,6 +61,11 @@ class Car:
 
 
     def check_front(self):
+        original_detection_angle_threshold = self.detection_angle_threshold
+        # Temporarily increase detection angle if car is in intersection or approaching
+        if self.status == "INTERSECTION" or self.status == "APPROACHING":
+            self.detection_angle_threshold *= 1.5
+
         closest_car_distance = math.inf # Initialise avec l'infini pour trouver le minimum
 
         for other_car in self.simulator.cars:
@@ -83,6 +88,7 @@ class Car:
                          print(f"Warning: ValueError pendant le calcul d'angle pour la voiture à {self.pos}")
                          continue # Passer à la voiture suivante
 
+        self.detection_angle_threshold = original_detection_angle_threshold # Restore original detection angle
         return closest_car_distance
 
     def move(self):
@@ -127,8 +133,10 @@ class Car:
                         distance_to_intersection = math.inf
             d = min(distance_to_obstacle, distance_to_intersection)
             
+            # Determine max_speed based on context (intersection or straight road)
+            current_max_speed = self.max_intersection_speed if self.status == "INTERSECTION" else self.max_speed
             
-            new_acceleration = self.beta * (1- self.speed/self.max_speed) - self.alpha * (1-d/self.detection_range)
+            new_acceleration = self.beta * (1- self.speed/current_max_speed) - self.alpha * (1-d/self.detection_range)
             if self.selected:
                 print(d, self.alpha * (1-d/self.detection_range), new_acceleration, self.acceleration)
             ### make sure acceleration shift is not too important, if it is clamp
@@ -146,8 +154,8 @@ class Car:
 
         # --- Mise à jour de la position ---
         self.speed += self.acceleration
-        max_speed = self.max_intersection_speed if self.status == "INTERSECTION" else self.max_speed
-        self.speed = max(0, min(self.speed, max_speed))
+        # max_speed was already determined above for the acceleration calculation
+        self.speed = max(0, min(self.speed, current_max_speed))
 
         speed = self.speed
         if self.speed < 0.2:
