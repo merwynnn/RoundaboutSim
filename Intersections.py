@@ -34,13 +34,15 @@ class ClassicRoundabout(Intersection):
         self.center = Vec2(pos)
         self.nb_lanes = 1
 
-        self.nb_target_to_check_before_enter = 3
+        # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
+        self.nb_target_to_check_before_enter = 4
 
         self.exits = []
         for exit_dir in exits_dir:
             self.exits.append(RoadExtremity((self.center.x + self.radius * exit_dir.x, self.center.y + self.radius * exit_dir.y), self))
 
-        self.targets = self.get_evenly_spaced_points(14)[::-1]
+        # Increased number of points from 14 to 20 for a smoother path around the roundabout.
+        self.targets = self.get_evenly_spaced_points(20)[::-1]
 
         self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
 
@@ -105,5 +107,9 @@ class ClassicRoundabout(Intersection):
         for i in range(self.nb_target_to_check_before_enter):
             btw_index = self.get_index(start_target_index - i - 1)
             if self.cars_between_targets[btw_index]:
-                return False
+                # Check for slow-moving cars in critical segments
+                for car_in_segment in self.cars_between_targets[btw_index]:
+                    if car_in_segment.speed < 0.5: # Speed threshold
+                        return False # Block entry if a car is too slow
+                return False # Block entry if segment is occupied (original check)
         return True
