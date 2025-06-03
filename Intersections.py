@@ -47,14 +47,29 @@ class ClassicRoundabout(Intersection):
         self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
 
     def draw(self, win):
-        pygame.draw.circle(win, ROAD_COLOR, self.center, self.radius)
-        pygame.draw.circle(win, BACKGROUND_COLOR, self.center, self.radius-self.nb_lanes*LANE_WIDTH)
-        pygame.draw.circle(win, (255, 255, 255), self.center, self.radius, STRIPE_WIDTH)
-        pygame.draw.circle(win, (255, 255, 255), self.center, self.radius-self.nb_lanes*LANE_WIDTH, STRIPE_WIDTH)
+        transformed_center = self.simulator.camera.apply(self.center)
+
+        scaled_radius = self.simulator.camera.get_scaled_value(self.radius)
+        # Ensure radius is at least 1 after scaling to be drawable
+        scaled_radius = max(1, int(scaled_radius))
+
+        scaled_lane_width = self.simulator.camera.get_scaled_value(LANE_WIDTH)
+        scaled_stripe_width = max(1, int(self.simulator.camera.get_scaled_value(STRIPE_WIDTH)))
+
+        pygame.draw.circle(win, ROAD_COLOR, transformed_center, scaled_radius)
+        inner_radius = scaled_radius - self.nb_lanes * scaled_lane_width
+        if inner_radius < 0 : inner_radius = 0 # Prevent negative radius
+        pygame.draw.circle(win, BACKGROUND_COLOR, transformed_center, inner_radius)
+
+        pygame.draw.circle(win, (255, 255, 255), transformed_center, scaled_radius, scaled_stripe_width)
+        if inner_radius > 0: # Only draw inner stripe if visible
+             pygame.draw.circle(win, (255, 255, 255), transformed_center, inner_radius, scaled_stripe_width)
 
         if self.simulator.debug:
+            debug_radius = max(1, int(self.simulator.camera.get_scaled_value(4)))
             for i, target in enumerate(self.targets):
-                pygame.draw.circle(win, (10, 0, 0), target, 4)
+                transformed_target = self.simulator.camera.apply(target)
+                pygame.draw.circle(win, (10, 0, 0), transformed_target, debug_radius)
             
 
 

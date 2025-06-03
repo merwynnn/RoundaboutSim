@@ -207,40 +207,100 @@ class Car:
         
 
     def draw(self, win):
+        # Car image scaling
+        base_car_size = 40 # Assuming the preloaded car_image is 40x40 at zoom_level 1.0
+        scaled_car_size = int(self.simulator.camera.get_scaled_value(base_car_size))
+        if scaled_car_size < 1: scaled_car_size = 1
+
+        # Scale the car_image (which is the one from preloaded_car_images)
+        temp_scaled_image = pygame.transform.scale(self.car_image, (scaled_car_size, scaled_car_size))
+
         # Rotate
         angle_degrees = self.dir.angle_to(Vec2(1, 0))
-        rotated_car_image = pygame.transform.rotate(self.car_image, angle_degrees-90) # Négatif car pygame tourne anti-horaire
+        rotated_image = pygame.transform.rotate(temp_scaled_image, angle_degrees-90)
 
-        # Obtenir le rectangle après rotation pour le centrer correctement
-        new_rect = rotated_car_image.get_rect(center = (int(self.pos.x), int(self.pos.y)))
+        # Apply camera transformation to the car's center position
+        transformed_center = self.simulator.camera.apply(self.pos)
+        new_rect = rotated_image.get_rect(center = transformed_center)
 
         # Dessiner l'image rotatée
-        win.blit(rotated_car_image, new_rect.topleft)
+        win.blit(rotated_image, new_rect.topleft)
 
-        if self.simulator.debug and self.selected: # Only draw debug if debug is on AND car is selected
+        if self.selected:
+            scaled_offset = self.simulator.camera.get_scaled_value(5) # Scale offset for selection box
+            scaled_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(2))) # Scale line thickness
+            selection_rect = pygame.Rect(
+                new_rect.left - scaled_offset,
+                new_rect.top - scaled_offset,
+                new_rect.width + 2 * scaled_offset,
+                new_rect.height + 2 * scaled_offset
+            )
+            pygame.draw.rect(win, (0, 255, 0), selection_rect, scaled_line_thickness)
+
+
+        if self.simulator.debug and self.selected:
+            debug_circle_radius = max(1, int(self.simulator.camera.get_scaled_value(5)))
+            debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(1)))
+
             if self.current_target_position:
-                pygame.draw.circle(win, (0, 0, 255), self.last_extremity.get_end_car_pos_dir(delta=-10)[0], 5)
-            try:
-                pygame.draw.circle(win, (255, 0, 255), self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0], 5)
-                pygame.draw.circle(win, (255, 255, 255), self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0], 5)
-            except:
-                pass
-            d = self.check_front()
-            if d > self.detection_range:
-                color = (0, 255, 0)
-            else:
-                color = (0, int(255-self.check_front()*255//self.detection_range), 0)
-            start_point = self.pos + self.dir * self.car_height // 2
-            # Calcul des points limites du cône de détection
-            p1 = start_point + Vec2(self.detection_range, 0).rotate(-self.detection_angle_threshold - angle_degrees)
-            p2 = start_point + Vec2(self.detection_range, 0).rotate(self.detection_angle_threshold - angle_degrees)
-            # Dessiner les lignes du cône
-            pygame.draw.line(win, color, start_point, p1, 1)
-            pygame.draw.line(win, color, start_point, p2, 1)
-            pygame.draw.arc(win, color, pygame.Rect(start_point.x - self.detection_range, start_point.y - self.detection_range, 2*self.detection_range, 2*self.detection_range), math.radians(angle_degrees - self.detection_angle_threshold), math.radians(angle_degrees + self.detection_angle_threshold), 1)
+                if hasattr(self.last_extremity, 'get_end_car_pos_dir'):
+                    try:
+                        target_pos_to_draw = self.last_extremity.get_end_car_pos_dir(delta=-10)[0]
+                        transformed_debug_target = self.simulator.camera.apply(target_pos_to_draw)
+                        pygame.draw.circle(win, (0, 0, 255), transformed_debug_target, debug_circle_radius)
+                    except (AttributeError, TypeError, IndexError): pass
 
-    def handle_click(self, pos):
-        # Create a bounding box for the car
-        car_rect = self.car_image.get_rect(center=(int(self.pos.x), int(self.pos.y)))
-        # Check if the click position is within the bounding box
-        return car_rect.collidepoint(pos)
+            try:
+                if hasattr(self.last_extremity, 'get_end_car_pos_dir'):
+                    transformed_debug_intersection = self.simulator.camera.apply(self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0])
+                    pygame.draw.circle(win, (255, 0, 255), transformed_debug_intersection, debug_circle_radius)
+                    transformed_debug_target_delta = self.simulator.camera.apply(self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0])
+                    pygame.draw.circle(win, (255, 255, 255), transformed_debug_target_delta, debug_circle_radius)
+            except (AttributeError, TypeError, IndexError): pass
+
+            d = self.check_front()
+            color_value = 0
+            # self.detection_range is in world units, no direct scaling here for the logic.
+            if d == math.inf or self.detection_range == 0:
+                 color = (0,255,0)
+            else:
+                color_value = int(255 - (d / self.detection_range) * 255)
+                color_value = max(0, min(255, color_value))
+                color = (0, color_value, 0)
+
+            # world_start_point uses self.car_height (world unit)
+            world_start_point = self.pos + self.dir * self.car_height // 2
+            transformed_start_point = self.simulator.camera.apply(world_start_point)
+
+            if self.dir.length_squared() > 0:
+                # world_p1/p2 use self.detection_range (world unit)
+                world_p1 = world_start_point + Vec2(self.detection_range, 0).rotate(-self.detection_angle_threshold - angle_degrees)
+                world_p2 = world_start_point + Vec2(self.detection_range, 0).rotate(self.detection_angle_threshold - angle_degrees)
+
+                draw_p1 = self.simulator.camera.apply(world_p1)
+                draw_p2 = self.simulator.camera.apply(world_p2)
+
+                pygame.draw.line(win, color, transformed_start_point, draw_p1, debug_line_thickness)
+                pygame.draw.line(win, color, transformed_start_point, draw_p2, debug_line_thickness)
+
+                # Arc drawing: The radius used for pygame.Rect should be scaled.
+                scaled_arc_display_radius = self.simulator.camera.get_scaled_value(self.detection_range)
+                debug_arc_rect_size = scaled_arc_display_radius * 2
+                debug_arc_rect = pygame.Rect(
+                    transformed_start_point.x - scaled_arc_display_radius,
+                    transformed_start_point.y - scaled_arc_display_radius,
+                    debug_arc_rect_size,
+                    debug_arc_rect_size
+                )
+                try:
+                    pygame.draw.arc(win, color, debug_arc_rect,
+                                    math.radians(angle_degrees - self.detection_angle_threshold),
+                                    math.radians(angle_degrees + self.detection_angle_threshold), debug_line_thickness)
+                except Exception: pass
+
+    def handle_click(self, world_pos): # world_pos is from simulator.camera.screen_to_world
+        distance_to_car_center = (world_pos - self.pos).length()
+        # car_width and car_height are world units if not scaled with image.
+        # For click detection, using a fixed world-unit radius is reasonable.
+        click_radius = (self.car_width + self.car_height) / 4
+        return distance_to_car_center < click_radius
