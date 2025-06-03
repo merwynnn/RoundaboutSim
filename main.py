@@ -123,8 +123,8 @@ while True:
                 intersections_0 = [ClassicRoundabout((400, 400), 100, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)])]
 
                 ext1 = RoadExtremity((0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext2 = RoadExtremity((WIDTH, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                ext2 = RoadExtremity((WIDTH, HEIGHT//2), spawn_cars=False, spawn_cars_timer=car_flow_rate)
+                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=False, spawn_cars_timer=car_flow_rate)
                 ext_4 = RoadExtremity((WIDTH//2, HEIGHT), spawn_cars=False, spawn_cars_timer=car_flow_rate)
 
                 roads_0 = [Road(ext1, intersections_0[0].exits[0]), Road(intersections_0[0].exits[1], ext2), Road(ext_3, intersections_0[0].exits[2]), Road(ext_4, intersections_0[0].exits[3])]

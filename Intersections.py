@@ -35,7 +35,7 @@ class ClassicRoundabout(Intersection):
         self.nb_lanes = 1
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
-        self.nb_target_to_check_before_enter = 4
+        self.nb_target_to_check_before_enter = 7
 
         self.exits = []
         for exit_dir in exits_dir:
@@ -118,7 +118,7 @@ class ClassicRoundabout(Intersection):
         """
         Returns True if there is enough space for the car to enter the roundabout (no car within min_distance meters).
         """
-        start_target_index = self.get_index(self.closest_target(extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)
+        start_target_index = self.get_index(self.closest_target(extremity.get_other_extremity().get_end_car_pos_dir()[0])+2)
         for i in range(self.nb_target_to_check_before_enter):
             btw_index = self.get_index(start_target_index - i - 1)
             if self.cars_between_targets[btw_index]:
