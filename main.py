@@ -22,15 +22,20 @@ def create_grid_setup(n, m):
     intersections = []
     roads = []
     road_extremity_spawners = []
-    grid_size_x = WIDTH / (m + 1)
-    grid_size_y = HEIGHT / (n + 1)
+
+    fixed_road_length = 300
+    roundabout_radius = 70
+    # Spacing between the centers of adjacent roundabouts
+    spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
     # Create intersections
     for i in range(n):
         for j in range(m):
-            pos = (int((j + 1) * grid_size_x), int((i + 1) * grid_size_y))
-            # Assuming a simple intersection type for now, adjust as needed
-            intersections.append(ClassicRoundabout(pos, 70, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
+            # Calculate position for the center of the roundabout
+            pos_x = (j * spacing_between_centers) + spacing_between_centers
+            pos_y = (i * spacing_between_centers) + spacing_between_centers
+            pos = (int(pos_x), int(pos_y))
+            intersections.append(ClassicRoundabout(pos, roundabout_radius, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
 
     # Create roads connecting intersections
     for i in range(n):
@@ -55,27 +60,46 @@ def create_grid_setup(n, m):
     # Create road extremities at the edges of the grid
     # Top edge
     for j in range(m):
-        ext = RoadExtremity((int((j + 1) * grid_size_x), 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        center_x_col_j = (j * spacing_between_centers) + spacing_between_centers
+        first_row_roundabout_up_exit_y = ((0 * spacing_between_centers) + spacing_between_centers) - roundabout_radius
+        spawner_y = first_row_roundabout_up_exit_y - fixed_road_length
+        ext_pos = (int(center_x_col_j), int(spawner_y))
+        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
         road_extremity_spawners.append(ext)
-        roads.append(Road(ext, intersections[j].exits[2])) # Connect extremity to top entry of first row
+        roads.append(Road(ext, intersections[j].exits[2]))
 
     # Bottom edge
     for j in range(m):
-        ext = RoadExtremity((int((j + 1) * grid_size_x), HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        center_x_col_j = (j * spacing_between_centers) + spacing_between_centers
+        last_row_idx = n - 1
+        last_row_roundabout_down_exit_y = ((last_row_idx * spacing_between_centers) + spacing_between_centers) + roundabout_radius
+        spawner_y = last_row_roundabout_down_exit_y + fixed_road_length
+        ext_pos = (int(center_x_col_j), int(spawner_y))
+        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
         road_extremity_spawners.append(ext)
-        roads.append(Road(intersections[(n-1)*m + j].exits[3], ext)) # Connect bottom exit of last row to extremity
+        roads.append(Road(intersections[last_row_idx * m + j].exits[3], ext))
 
     # Left edge
     for i in range(n):
-        ext = RoadExtremity((0, int((i + 1) * grid_size_y)), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        center_y_row_i = (i * spacing_between_centers) + spacing_between_centers
+        first_col_idx = 0
+        first_col_roundabout_left_exit_x = ((first_col_idx * spacing_between_centers) + spacing_between_centers) - roundabout_radius
+        spawner_x = first_col_roundabout_left_exit_x - fixed_road_length
+        ext_pos = (int(spawner_x), int(center_y_row_i))
+        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
         road_extremity_spawners.append(ext)
-        roads.append(Road(ext, intersections[i*m].exits[0])) # Connect extremity to left entry of first column
+        roads.append(Road(ext, intersections[i * m + first_col_idx].exits[0]))
 
     # Right edge
     for i in range(n):
-        ext = RoadExtremity((WIDTH, int((i + 1) * grid_size_y)), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        center_y_row_i = (i * spacing_between_centers) + spacing_between_centers
+        last_col_idx = m - 1
+        last_col_roundabout_right_exit_x = ((last_col_idx * spacing_between_centers) + spacing_between_centers) + roundabout_radius
+        spawner_x = last_col_roundabout_right_exit_x + fixed_road_length
+        ext_pos = (int(spawner_x), int(center_y_row_i))
+        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
         road_extremity_spawners.append(ext)
-        roads.append(Road(intersections[i*m + (m-1)].exits[1], ext)) # Connect right exit of last column to extremity
+        roads.append(Road(intersections[i * m + last_col_idx].exits[1], ext))
 
 
     return intersections, roads, road_extremity_spawners
@@ -99,8 +123,8 @@ while True:
                 intersections_0 = [ClassicRoundabout((400, 400), 100, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)])]
 
                 ext1 = RoadExtremity((0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext2 = RoadExtremity((WIDTH, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                ext2 = RoadExtremity((WIDTH, HEIGHT//2), spawn_cars=False, spawn_cars_timer=car_flow_rate)
+                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=False, spawn_cars_timer=car_flow_rate)
                 ext_4 = RoadExtremity((WIDTH//2, HEIGHT), spawn_cars=False, spawn_cars_timer=car_flow_rate)
 
                 roads_0 = [Road(ext1, intersections_0[0].exits[0]), Road(intersections_0[0].exits[1], ext2), Road(ext_3, intersections_0[0].exits[2]), Road(ext_4, intersections_0[0].exits[3])]

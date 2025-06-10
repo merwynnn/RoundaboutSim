@@ -6,6 +6,7 @@ from collections import deque
 from Constants import *
 from Road import Road, RoadExtremity
 from Car import Car
+from Camera import Camera # Added
 from Intersections import *
 import os
 
@@ -36,6 +37,8 @@ class Simulator:
     def __init__(self, win=None):
         Simulator._instance = self
         self.win = win
+        from Constants import WIDTH, HEIGHT # Make sure WIDTH and HEIGHT are imported
+        self.camera = Camera(WIDTH, HEIGHT) # Added
         self.initialized = False
 
         # Preload car images once
@@ -116,14 +119,16 @@ class Simulator:
             return
         # --- Your existing run loop ---
         for event in events:
+            self.camera.handle_event(event) # Added
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
                     self.debug = not self.debug # Toggle debug mode
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left click
+                    world_mouse_pos = self.camera.screen_to_world(pygame.math.Vector2(event.pos)) # Added
                     clicked_car = None
                     for car in self.cars:
-                        if car.handle_click(event.pos):
+                        if car.handle_click(world_mouse_pos): # Modified to use world_mouse_pos
                             clicked_car = car
                             break # Found a clicked car, no need to check others
 
