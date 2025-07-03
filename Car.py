@@ -24,7 +24,7 @@ class Car:
         self.alpha = 5 # Increased alpha for stronger obstacle avoidance response
         self.beta = 3
         self.max_acceleration = 0.006
-        self.max_deceleration = 0.03 # Increased max_deceleration for quicker stops
+        self.max_deceleration = -0.03 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -45,6 +45,8 @@ class Car:
         self.target_delta = -20
 
         self.can_enter_intersection = False
+
+        self.distance_to_intersection = math.inf
 
         # Image
         if car_image is not None:
@@ -123,30 +125,31 @@ class Car:
 
 
 
-            distance_to_intersection = math.inf
+            self.distance_to_intersection = math.inf
 
             if self.status == "APPROACHING" and self.current_target_extremity.intersection:     # Approaching intersection
-                distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0] - self.pos).length() 
-                if distance_to_intersection > self.detection_range:
-                    distance_to_intersection = math.inf
+                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0] - self.pos).length() 
+                if self.distance_to_intersection > self.detection_range:
+                    self.distance_to_intersection = math.inf
                 
                 if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < self.engine_force*500:    # reached target
                     if self.can_enter_intersection:
-                        distance_to_intersection = math.inf
+                        self.distance_to_intersection = math.inf
                     elif self.current_target_extremity.intersection.can_car_enter(self.current_target_extremity):
-                        distance_to_intersection = math.inf
+                        self.distance_to_intersection = math.inf
                         self.can_enter_intersection = True
-            d = min(distance_to_obstacle, distance_to_intersection)
-            
+            d = min(distance_to_obstacle, self.distance_to_intersection)
             # Determine max_speed based on context (intersection or straight road)
             current_max_speed = self.max_intersection_speed if self.status == "INTERSECTION" else self.max_speed
             
             new_acceleration = self.beta * (1- self.speed/current_max_speed) - self.alpha * (1-d/self.detection_range)
+            if self.selected and new_acceleration < 0:
+                print(new_acceleration, self.speed)
             ### make sure acceleration shift is not too important, if it is clamp
             if new_acceleration > self.acceleration:
                 self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
             elif new_acceleration < self.acceleration:
-                self.acceleration = max(new_acceleration, self.acceleration - self.max_deceleration)
+                self.acceleration = max(new_acceleration, self.acceleration + self.max_deceleration)
             else:
                 self.acceleration = new_acceleration
 
@@ -164,6 +167,8 @@ class Car:
         if self.speed < 0.2:
             speed = 0
             self.acceleration = 0
+
+        self.acceleration = min(max(self.acceleration, -0.3), 0.3)
             
         self.pos += self.dir * speed
 
@@ -197,6 +202,7 @@ class Car:
             return next_target_pos
     
         elif self.status=="EXITING":
+            self.can_enter_intersection = False
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             self.status="APPROACHING"

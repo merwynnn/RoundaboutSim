@@ -47,6 +47,9 @@ class Simulator:
         self.debug = False
         self.selected_car = None # Track the currently selected car
 
+        # Font for debug text
+        self.font = pygame.font.Font(None, 24)
+
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
         # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
@@ -161,6 +164,40 @@ class Simulator:
         for road_extremity in self.road_extremity_spawners:
             road_extremity.update()
 
+        if self.selected_car and self.debug:
+            self.draw_debug_panel()
+
+
+    def draw_debug_panel(self):
+        car = self.selected_car
+        debug_info = [
+            f"Status: {car.status}",
+            f"Speed: {car.speed:.2f}",
+            f"Acceleration: {car.acceleration:.3f}",
+            f"Max Speed: {car.max_speed}",
+            f"Dist Obstacle: {car.check_front():.2f}",
+            f"Dist Inter: {car.distance_to_intersection}",
+            f"Num Cars: {len(self.cars)}",
+            f"Can Enter: {car.can_enter_intersection}",
+        ]
+        if car.current_target_extremity.intersection:
+                can_enter = car.current_target_extremity.intersection.can_car_enter(car.current_target_extremity)
+                debug_info.append(f"Can Enter Int: {can_enter}")
+        else:
+                debug_info.append(f"Can Enter Int: N/A")
+
+
+        debug_rect_width = 200
+        debug_rect_height = 180
+        debug_rect_x = WIDTH - debug_rect_width - 10
+        debug_rect_y = 10
+
+        pygame.draw.rect(self.win, (200, 200, 200), (debug_rect_x, debug_rect_y, debug_rect_width, debug_rect_height))
+        pygame.draw.rect(self.win, (0, 0, 0), (debug_rect_x, debug_rect_y, debug_rect_width, debug_rect_height), 2)
+
+        for i, line in enumerate(debug_info):
+            text_surface = self.font.render(line, True, (0, 0, 0))
+            self.win.blit(text_surface, (debug_rect_x + 10, debug_rect_y + 10 + i * 20))
 
     def generate_path(self, start_extremity, end_extremity):
         """
