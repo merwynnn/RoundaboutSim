@@ -10,7 +10,7 @@ class Intersection:
         self.simulator = Simulator.get_instance()
         
 
-    def update(self):
+    def update(self, dt):
         pass
     
     def can_car_enter(self, car):
