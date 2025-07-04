@@ -2,6 +2,7 @@ import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
 import math
+import time # Added for time tracking
 
 class Car:
     
@@ -10,6 +11,10 @@ class Car:
         self.simulator = Simulator.get_instance()
 
         self.pos, self.dir = path[0].get_start_car_pos_dir()
+
+        self.start_time = time.time() # Track start time
+        self.time_spent_in_intersection = 0.0 # Track time in current intersection
+        self.time_entered_intersection = 0.0 # Timestamp when car enters an intersection
 
         self.selected = False # Add selected attribute
 
@@ -30,7 +35,8 @@ class Car:
         self.last_extremity = path[0]
 
         # Path
-        self.path = path
+        self.path = path # This is a list of RoadExtremity objects
+        self.full_path_for_min_time_calc = list(path) # Keep a copy for min time calculation
 
         
         # Image
@@ -249,7 +255,7 @@ class Car:
             next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index, car=self)
             self.current_target_index += 1
             self.status = "INTERSECTION"
-
+            self.time_entered_intersection = time.time() # Record time entering intersection
                         
             self.detection_range = self.detection_range_angular
             self.detection_angle_threshold = self.detection_angle_threshold_angular
@@ -260,6 +266,20 @@ class Car:
     
         elif self.status=="EXITING":
             self.can_enter_intersection = False
+            current_intersection_object = self.last_extremity.intersection # Intersection being exited
+
+            if self.time_entered_intersection > 0 and current_intersection_object: # Ensure it was set and we have an intersection
+                self.time_spent_in_intersection = time.time() - self.time_entered_intersection
+                self.time_entered_intersection = 0 # Reset for next intersection
+
+                min_crossing_time = current_intersection_object.get_min_crossing_time()
+                if min_crossing_time > 0: # Avoid division by zero
+                    if self.time_spent_in_intersection > min_crossing_time * LOCAL_CONGESTION_THRESHOLD:
+                        current_intersection_object.register_local_congestion()
+                        # print(f"Car {id(self)} was LOCALLY congested in intersection {id(current_intersection_object)}. Actual: {self.time_spent_in_intersection:.2f}s, Min: {min_crossing_time:.2f}s")
+                current_intersection_object.register_car_passed()
+
+
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             self.status="APPROACHING"
@@ -409,3 +429,159 @@ class Car:
         # For click detection, using a fixed world-unit radius is reasonable.
         click_radius = (self.car_width + self.car_height) / 4
         return distance_to_car_center < click_radius
+
+    def calculate_min_travel_time(self):
+        """
+        Calculates the minimum theoretical travel time for the car's full path.
+        This is based on road lengths and intersection crossing estimates.
+        """
+        if not self.full_path_for_min_time_calc:
+            return 0.0
+
+        total_min_time = 0.0
+
+        # Iterate through the path segments (extremity to extremity)
+        for i in range(len(self.full_path_for_min_time_calc) - 1):
+            current_ext = self.full_path_for_min_time_calc[i]
+            next_ext = self.full_path_for_min_time_calc[i+1]
+
+            if current_ext.road and next_ext.road and current_ext.road == next_ext.road:
+                # Segment is on a road
+                # The path gives extremities. If two consecutive extremities are on the same road,
+                # it means the car is traversing that road.
+                road_length = current_ext.road.length
+                if self.max_speed > 0:
+                    total_min_time += road_length / self.max_speed
+                # If max_speed is 0, time would be infinite, handle as appropriate (e.g., skip or add a large penalty)
+
+            elif current_ext.intersection and next_ext.intersection and current_ext.intersection == next_ext.intersection:
+                # Segment is within an intersection (e.g. from an entry point to an exit point of the *same* intersection)
+                # This case implies the path is detailed enough to list intermediate points within an intersection,
+                # or that an "extremity" can also be an internal point of an intersection.
+                # For now, we use the intersection's estimated crossing time.
+                total_min_time += current_ext.intersection.get_min_crossing_time()
+
+            elif current_ext.intersection and not next_ext.intersection:
+                # Exiting an intersection onto a road - time already accounted for by intersection's min_crossing_time
+                # or will be by the next road segment.
+                pass # Or add specific logic if needed
+
+            elif not current_ext.intersection and next_ext.intersection:
+                # Entering an intersection from a road - time for road segment already added.
+                # The intersection crossing time will be added when the path segment is *within* the intersection.
+                 total_min_time += next_ext.intersection.get_min_crossing_time()
+
+
+            # Consider transitions: Road -> Intersection -> Road
+            # If current_ext is on a road and next_ext is an entry to an intersection,
+            # the road travel time is covered by the road segment.
+            # The time to cross the intersection is handled when path segments are *within* the intersection
+            # or by a general estimate if the path doesn't detail internal intersection points.
+
+        # A simple heuristic: sum of road travel times + sum of intersection crossing times
+        # This requires careful path definition. If path is [RoadExt1_Entry, RoadExt1_Exit, IntExt1_Entry, IntExt1_Exit, RoadExt2_Entry, ...]
+
+        # Let's refine: The path is a list of extremities.
+        # A car moves from path[i] to path[i+1].
+        # If path[i] and path[i+1] are on the same road, it's road travel.
+        # If path[i] is an exit of an intersection and path[i+1] is an entry to another (or same for U-turn),
+        # this implies traversing a road between them.
+        # If path[i] is an entry to an intersection and path[i+1] is an exit of the *same* intersection,
+        # this is crossing an intersection.
+
+        # Reset and recalculate more clearly:
+        total_min_time = 0.0
+
+        # The path from simulator.generate_path is like:
+        # [start_road_extremity, intersection_entry_extremity, intersection_exit_extremity, next_road_extremity, ...]
+        # Or for a simple road: [road_start_extremity, road_end_extremity]
+
+        for i in range(len(self.full_path_for_min_time_calc) -1 ):
+            ext1 = self.full_path_for_min_time_calc[i]
+            ext2 = self.full_path_for_min_time_calc[i+1]
+
+            if ext1.road and ext1.get_other_extremity() == ext2: # Traversing a road
+                road_length = ext1.road.length
+                if self.max_speed > 0:
+                    total_min_time += road_length / self.max_speed
+                # print(f"Car path: Road segment {ext1.road} length {road_length}, time {road_length / self.max_speed if self.max_speed > 0 else float('inf')}")
+
+            elif ext1.intersection and ext2.intersection and ext1.intersection == ext2.intersection: # Crossing an intersection
+                # This condition implies ext1 is an entry point and ext2 is an exit point of the same intersection.
+                # The path structure from generate_path might not directly give this for complex intersections.
+                # generate_path typically gives [..., road_exit_extremity, intersection_entry_extremity, intersection_exit_extremity, next_road_entry_extremity, ...]
+                # So, if ext1.intersection is set, it's an extremity *of* an intersection.
+                # If ext1 is an entry and ext2 is an exit of the *same* intersection.
+                # This means the car is currently "assigned" to ext1 (e.g. an entry point of roundabout)
+                # and its next target ext2 is an exit point of the *same* roundabout.
+                # This is the time spent *inside* the intersection.
+                total_min_time += ext1.intersection.get_min_crossing_time()
+                # print(f"Car path: Intersection segment {ext1.intersection}, time {ext1.intersection.get_min_crossing_time()}")
+
+
+        # The path structure from `generate_path` alternates between road extremities and intersection extremities.
+        # Example: [RoadExtremityA (on Road1), IntersectionExtremityB (entry to Intersection1), IntersectionExtremityC (exit from Intersection1), RoadExtremityD (on Road2)]
+        # Segment 1: RoadExtremityA -> IntersectionExtremityB (This is travel ON Road1)
+        # Segment 2: IntersectionExtremityB -> IntersectionExtremityC (This is travel INSIDE Intersection1)
+        # Segment 3: IntersectionExtremityC -> RoadExtremityD (This is travel ON Road2)
+
+        # Recalculating with the path structure in mind:
+        total_min_time = 0.0
+        # print(f"Car {id(self)} Path for min_time_calc: {[id(p) for p in self.full_path_for_min_time_calc]}")
+
+        temp_path = list(self.full_path_for_min_time_calc)
+
+        current_node = temp_path.pop(0)
+        while temp_path:
+            next_node = temp_path.pop(0)
+
+            # Check if moving along a road
+            # This happens if current_node is an extremity of a road, and next_node is the *other* extremity of the *same* road.
+            if current_node.road and current_node.get_other_extremity() == next_node:
+                road_length = current_node.road.length
+                if self.max_speed > 0:
+                    total_min_time += road_length / self.max_speed
+                # print(f"  MinTime: Road {current_node.road.length / self.max_speed if self.max_speed > 0 else 0}")
+
+            # Check if moving through an intersection
+            # This happens if current_node is an entry extremity of an intersection,
+            # and next_node is an exit extremity of the *same* intersection.
+            elif current_node.intersection and next_node.intersection and current_node.intersection == next_node.intersection:
+                # This implies generate_path includes both entry and exit extremities for an intersection crossing.
+                total_min_time += current_node.intersection.get_min_crossing_time()
+                # print(f"  MinTime: Intersection {current_node.intersection.get_min_crossing_time()}")
+
+            current_node = next_node
+
+        return total_min_time / (1000.0/60.0) # Convert from simulation ticks to seconds (assuming speed is in units/tick)
+        # Assuming max_speed is in units per simulation step (frame).
+        # If max_speed is units per second, then no division by time_factor needed here.
+        # Let's assume speed units are consistent with distance units / dt.
+        # The problem is that max_speed is units/tick, but time.time() is in seconds.
+        # We need to be consistent. If travel times are calculated in ticks, then actual time also in ticks.
+        # Car.speed is units/tick. Car.pos updated by speed * time_factor. time_factor is dt / (1000/60).
+        # So speed is effectively units / (dt_normalized_to_60fps_step).
+        # min_travel_time should be in seconds if actual_travel_time is in seconds.
+
+        # If self.max_speed is pixels/tick (where a tick is 1/60th of a second conceptually)
+        # And road_length is in pixels.
+        # Then road_length / self.max_speed gives time in ticks.
+        # To convert ticks to seconds: time_in_ticks * ( (1000/60) / 1000 ) = time_in_ticks / 60
+        # The current time.time() is in seconds.
+        # So, min_travel_time should also be in seconds.
+        # total_min_time calculated above is in "ticks" if max_speed is units/tick.
+        # Let's assume max_speed is in "units per nominal frame (1/60s)".
+        # So, total_min_time is in "nominal frames". To convert to seconds: total_min_time * (1/60).
+        # This assumes the simulation runs perfectly at 60 FPS for this calculation.
+        # Or, if max_speed is intended as units / second already, then no conversion.
+        # Given Car.move uses dt, and speed is updated, speed is units/frame.
+        # Let's assume max_speed is units / (scaled dt).
+        # The most robust way: define max_speed in world units per second.
+        # Then convert it to units per tick for simulation movement.
+        # For min_travel_time: time = distance / (max_speed_units_per_second)
+
+        # Let's redefine max_speed in Car.py to be in world units per second.
+        # And then in Car.move, scale it by dt for actual movement per frame.
+        # For now, assuming self.max_speed is units / (nominal tick of 16.66ms)
+        # So total_min_time is in ticks. Convert to seconds:
+        return total_min_time * (16.666 / 1000.0) # ticks * seconds/tick

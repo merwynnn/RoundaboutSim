@@ -47,6 +47,11 @@ class Simulator:
         self.debug = False
         self.selected_car = None # Track the currently selected car
 
+        # Congestion tracking
+        self.total_cars_spawned_count = 0
+        self.total_cars_congested_macro_count = 0
+        self.global_congestion_factor = 0.0
+
         # Font for debug text
         self.font = pygame.font.Font(None, 24)
 
@@ -190,9 +195,12 @@ class Simulator:
         else:
                 debug_info.append(f"Can Enter Int: N/A")
 
+        # Add global congestion factor to debug panel (or a general info panel)
+        debug_info.append(f"Global Congestion: {self.global_congestion_factor:.2f}")
+
 
         debug_rect_width = 200
-        debug_rect_height = 180
+        debug_rect_height = 200 # Increased height for new line
         debug_rect_x = WIDTH - debug_rect_width - 10
         debug_rect_y = 10
 
@@ -264,6 +272,19 @@ class Simulator:
 
 
     def car_reached_destination(self, car):
+        import time # For current time
+        actual_travel_time = time.time() - car.start_time
+        min_travel_time = car.calculate_min_travel_time()
+
+        if min_travel_time > 0: # Avoid division by zero if path was instantaneous or invalid
+            if actual_travel_time > min_travel_time * MACRO_CONGESTION_THRESHOLD:
+                self.total_cars_congested_macro_count += 1
+                # print(f"Car {id(car)} was MACRO congested. Actual: {actual_travel_time:.2f}s, Min: {min_travel_time:.2f}s")
+
+        if self.total_cars_spawned_count > 0 : # total_cars_spawned_count is incremented in spawn_car before this can be an issue for a just spawned car
+             self.global_congestion_factor = self.total_cars_congested_macro_count / self.total_cars_spawned_count
+
+
         # Check if the car object exists in the list before attempting removal
         if car in self.cars:
             self.cars.remove(car)
@@ -273,6 +294,7 @@ class Simulator:
 
 
     def spawn_car(self, start_extremity):
+        self.total_cars_spawned_count +=1
         # Choose a random end extremity that is NOT the start extremity or on the same road
         possible_ends = [
             ext for ext in self.road_extremity_spawners if ext != start_extremity
