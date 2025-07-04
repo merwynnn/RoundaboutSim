@@ -276,6 +276,36 @@ class Car:
 
         
 
+    def draw_rect(self, win):
+        # Car rectangle scaling
+        rect_width = self.simulator.camera.get_scaled_value(self.car_width*0.4)
+        rect_height = self.simulator.camera.get_scaled_value(self.car_height*0.7)
+        if rect_width < 1: rect_width = 1
+        if rect_height < 1: rect_height = 1
+
+        # Determine color based on speed
+        if self.speed == 0:
+            color = (255, 0, 0)  # Red for stationary
+        else:
+            # Interpolate from yellow (slow) to green (fast)
+            speed_ratio = min(self.speed / self.max_speed, 1.0)
+            red = int(255 * (1 - speed_ratio))
+            blue = int(255 * speed_ratio)
+            color = (red, 0, blue)
+
+        # Create a surface for the rectangle
+        rect_surface = pygame.Surface((rect_width, rect_height), pygame.SRCALPHA)
+        rect_surface.fill(color)
+        
+        # Rotate the rectangle
+        angle_degrees = self.dir.angle_to(Vec2(1, 0))
+        rotated_surface = pygame.transform.rotate(rect_surface, angle_degrees - 90)
+        
+        # Apply camera transformation and draw
+        transformed_center = self.simulator.camera.apply(self.pos)
+        new_rect = rotated_surface.get_rect(center=transformed_center)
+        win.blit(rotated_surface, new_rect.topleft)
+
     def draw(self, win):
         # Car image scaling
         base_car_size = 40 # Assuming the preloaded car_image is 40x40 at zoom_level 1.0
@@ -294,7 +324,12 @@ class Car:
         new_rect = rotated_image.get_rect(center = transformed_center)
 
         # Dessiner l'image rotatée
-        win.blit(rotated_image, new_rect.topleft)
+        
+
+        if self.simulator.render_as_rect:
+            self.draw_rect(win)
+        else:
+            win.blit(rotated_image, new_rect.topleft)
 
         if self.selected:
             scaled_offset = self.simulator.camera.get_scaled_value(5) # Scale offset for selection box

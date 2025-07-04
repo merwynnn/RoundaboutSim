@@ -50,6 +50,8 @@ class Simulator:
         # Font for debug text
         self.font = pygame.font.Font(None, 24)
 
+        self.render_as_rect = False
+
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
         # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
@@ -126,6 +128,8 @@ class Simulator:
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_d:
                     self.debug = not self.debug # Toggle debug mode
+                if event.key == pygame.K_r:
+                    self.render_as_rect = not self.render_as_rect
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left click
                     world_mouse_pos = self.camera.screen_to_world(pygame.math.Vector2(event.pos)) # Added
