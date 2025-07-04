@@ -80,11 +80,13 @@ class ClassicRoundabout(Intersection):
 
         # Determine color based on local congestion factor
         # Interpolate from green (0% congestion) to red (100% congestion)
-        congestion_ratio = min(self.local_congestion_factor, 1.0) # Cap at 1.0 for color calculation
-        red_color = int(255 * congestion_ratio)
-        green_color = int(255 * (1 - congestion_ratio))
-        blue_color = 0
-        current_road_color = (red_color, green_color, blue_color)
+        current_road_color = ROAD_COLOR
+        if self.simulator.debug:
+            congestion_ratio = min(self.local_congestion_factor, 1.0) # Cap at 1.0 for color calculation
+            red_color = int(255 * congestion_ratio)
+            green_color = int(255 * (1 - congestion_ratio))
+            blue_color = 0
+            current_road_color = (red_color, green_color, blue_color)
 
         pygame.draw.circle(win, current_road_color, transformed_center, scaled_radius) # Use dynamic color
         inner_radius = scaled_radius - self.nb_lanes * scaled_lane_width
@@ -96,7 +98,7 @@ class ClassicRoundabout(Intersection):
              pygame.draw.circle(win, (255, 255, 255), transformed_center, inner_radius, scaled_stripe_width)
 
         # Display local congestion factor as text
-        if self.simulator.debug or True: # Always show for now, or tie to debug flag
+        if self.simulator.debug: # Always show for now, or tie to debug flag
             font = self.simulator.font # Assuming simulator has a font preloaded
             text_surface = font.render(f"{self.local_congestion_factor:.2f}", True, (255, 255, 255)) # White text
             # Position text near the intersection's center, adjusted for camera

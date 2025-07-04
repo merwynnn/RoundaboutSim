@@ -16,7 +16,7 @@ clock = pygame.time.Clock()
 
 simulator = Simulator(win)
 
-car_flow_rate = 120
+car_flow_rate = 240
 
 def create_grid_setup(n, m):
     intersections = []
@@ -24,7 +24,7 @@ def create_grid_setup(n, m):
     road_extremity_spawners = []
 
     fixed_road_length = 500
-    roundabout_radius = 100
+    roundabout_radius = 150
     # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
@@ -104,10 +104,11 @@ def create_grid_setup(n, m):
 
     return intersections, roads, road_extremity_spawners
 
+fps = 60
 
 time_multiplier = 1
 while True:
-    dt = clock.tick(60) * time_multiplier # Delta time in milliseconds
+    dt = time_multiplier
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:

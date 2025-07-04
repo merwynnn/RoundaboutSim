@@ -15,6 +15,8 @@ class RoadExtremity:
         self.spawn_cars_timer = spawn_cars_timer
         self.timer = 0
 
+        self.last_spawned_car = None
+
             
     def update(self, dt):
         if self.spawn_cars:
@@ -22,7 +24,11 @@ class RoadExtremity:
             if self.timer >= self.spawn_cars_timer:
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
-                Simulator.get_instance().spawn_car(self)
+                if self.last_spawned_car:
+                    if (self.last_spawned_car.pos - self.pos).length() > 20:
+                        self.last_spawned_car = Simulator.get_instance().spawn_car(self)
+                else:
+                    self.last_spawned_car = Simulator.get_instance().spawn_car(self)
                 self.timer = 0
                 
 
