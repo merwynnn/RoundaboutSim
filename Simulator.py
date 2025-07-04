@@ -148,21 +148,21 @@ class Simulator:
         self.win.fill(BACKGROUND_COLOR)
 
         for road in self.roads:
-            road.update()
+            road.update(dt)
             road.draw(self.win)
 
 
         for intersection in self.intersections:
-            intersection.update()
+            intersection.update(dt)
             intersection.draw(self.win)
 
         # Use a copy of the list for iteration if cars can be removed during the loop
         for car in list(self.cars):
-            car.move()
+            car.move(dt)
             car.draw(self.win)
 
         for road_extremity in self.road_extremity_spawners:
-            road_extremity.update()
+            road_extremity.update(dt)
 
         if self.selected_car and self.debug:
             self.draw_debug_panel()
@@ -175,8 +175,8 @@ class Simulator:
             f"Speed: {car.speed:.2f}",
             f"Acceleration: {car.acceleration:.3f}",
             f"Max Speed: {car.max_speed}",
-            f"Dist Obstacle: {car.check_front():.2f}",
-            f"Dist Inter: {car.distance_to_intersection}",
+            f"Dist Obstacle: {car.check_front()[0]:.2f}",
+            f"Dist Exit: {car.distance_on_exit_road}",
             f"Num Cars: {len(self.cars)}",
             f"Can Enter: {car.can_enter_intersection}",
         ]

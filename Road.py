@@ -16,10 +16,10 @@ class RoadExtremity:
         self.timer = 0
 
             
-    def update(self):
+    def update(self, dt):
         if self.spawn_cars:
-            self.timer += 1
-            if self.timer % self.spawn_cars_timer == 0:
+            self.timer += 0.05*dt
+            if self.timer >= self.spawn_cars_timer:
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
                 Simulator.get_instance().spawn_car(self)
@@ -123,5 +123,5 @@ class Road:
             pygame.draw.circle(win, (0, 255, 0), transformed_center_11, 5)
 
     
-    def update(self):
+    def update(self, dt):
         pass

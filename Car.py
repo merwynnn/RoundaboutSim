@@ -31,6 +31,27 @@ class Car:
 
         # Path
         self.path = path
+
+        
+        # Image
+        if car_image is not None:
+            self.car_image = car_image.copy()
+        else:
+            self.car_image = pygame.Surface((40, 40))
+            self.car_image.fill((255, 0, 0))
+        self.car_width = self.car_image.get_width() if self.car_image else 40
+        self.car_height = self.car_image.get_height() if self.car_image else 40
+
+
+        
+        self.detection_range_normal = self.car_height * 2.5
+        self.detection_angle_threshold_normal = 25.0 
+
+        self.detection_range_angular = self.car_height * 1.7
+        self.detection_angle_threshold_angular = 35.0
+        
+        self.detection_range = self.detection_range_normal
+        self.detection_angle_threshold = self.detection_angle_threshold_normal
         
         # Targets
         self.status = "EXITING"
@@ -47,55 +68,45 @@ class Car:
         self.can_enter_intersection = False
 
         self.distance_to_intersection = math.inf
+        self.distance_on_exit_road = math.inf
 
-        # Image
-        if car_image is not None:
-            self.car_image = car_image.copy()
-        else:
-            self.car_image = pygame.Surface((40, 40))
-            self.car_image.fill((255, 0, 0))
-        self.car_width = self.car_image.get_width() if self.car_image else 40
-        self.car_height = self.car_image.get_height() if self.car_image else 40
 
-        self.detection_range = self.car_height * 2.5
-        self.detection_angle_threshold = 4.0 # Angle (en degrés) pour considérer "devant" (+/- cet angle)
-
-        
         
 
 
     def check_front(self):
-        original_detection_angle_threshold = self.detection_angle_threshold
-        # Temporarily increase detection angle if car is in intersection or approaching
-        if self.status == "INTERSECTION" or self.status == "APPROACHING":
-            self.detection_angle_threshold *= 1.5
-
+        
         closest_car_distance = math.inf # Initialise avec l'infini pour trouver le minimum
+        car = None
 
         for other_car in self.simulator.cars:
-            if other_car is self or (other_car.status == "APPROACHING" and self.status != "APPROACHING"):
+            if other_car is self or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
                 continue
             
-            start_pos = self.pos+self.dir*self.car_height//2
+            start_pos = self.pos+self.dir*self.car_height/2
             vector_to_other = other_car.pos - start_pos
             distance = vector_to_other.length()
             if 0 < distance < self.detection_range:
+
                 if vector_to_other.length_squared() > 1e-6: 
                     try:
                         angle = self.dir.angle_to(vector_to_other)
-
+                        angle = (angle + 180) % 360 - 180
                         if abs(angle) < self.detection_angle_threshold:
+ 
                             # La voiture est devant et dans la portée
                             if distance < closest_car_distance:
                                 closest_car_distance = distance
+                                car = other_car
                     except ValueError:
                          print(f"Warning: ValueError pendant le calcul d'angle pour la voiture à {self.pos}")
                          continue # Passer à la voiture suivante
 
-        self.detection_angle_threshold = original_detection_angle_threshold # Restore original detection angle
-        return closest_car_distance
+        return closest_car_distance, car
 
-    def move(self):
+    def move(self, dt):
+        time_factor = dt / (1000.0 / 60.0) if dt > 0 else 1
+
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
             distance = target_vector.length()
@@ -106,7 +117,7 @@ class Car:
                 angle = self.dir.angle_to(target_dir)
                 angle = (angle + 180) % 360 - 180
                 if abs(angle) > self.steering_speed:
-                    self.dir = self.dir.rotate(self.steering_speed * math.copysign(1, angle))
+                    self.dir = self.dir.rotate(self.steering_speed * math.copysign(1, angle) * time_factor)
                 else:
                     self.dir = target_dir                    
 
@@ -121,9 +132,39 @@ class Car:
 
             # --- Accélération ---
 
-            distance_to_obstacle = self.check_front()
+            distance_to_obstacle, obstacle = self.check_front()
 
+            if self.status == "INTERSECTION":
+                if obstacle:
+                    if obstacle.speed > 1.5:
+                        distance_to_obstacle = math.inf
 
+            self.distance_on_exit_road = math.inf
+            if (self.status == "INTERSECTION" and self.reached_last_intersection_target) or self.status == "EXITING":
+                exit_road = self.current_target_extremity if self.status == "INTERSECTION" else self.last_extremity
+                exit_point, exit_dir = exit_road.get_start_car_pos_dir()
+
+                for other_car in self.simulator.cars:
+                    if other_car is self:
+                        continue
+
+                    # Check if the other car is on the exit road, in front of the intersection exit
+                    vec_from_exit_to_other = other_car.pos - exit_point
+                    
+                    # Project the vector onto the exit direction
+                    proj = vec_from_exit_to_other.dot(exit_dir)
+
+                    if proj > 0: # If the car is physically after the exit point of the intersection
+                        # Check if the car is reasonably aligned with the road
+                        # and close enough to be a concern.
+                        dist_to_road_line = (exit_point + proj * exit_dir) - other_car.pos
+                        if dist_to_road_line.length() < 15: # 15 pixels tolerance from road center line
+                            
+                            # It's on the road, calculate distance from our car
+                            dist_to_other_car = (other_car.pos - self.pos).length()
+                            
+                            if dist_to_other_car < self.distance_on_exit_road:
+                                self.distance_on_exit_road = dist_to_other_car
 
             self.distance_to_intersection = math.inf
 
@@ -138,13 +179,16 @@ class Car:
                     elif self.current_target_extremity.intersection.can_car_enter(self.current_target_extremity):
                         self.distance_to_intersection = math.inf
                         self.can_enter_intersection = True
-            d = min(distance_to_obstacle, self.distance_to_intersection)
+            d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
+            if d<self.detection_range/5:
+                self.acceleration = 0
+                self.speed = 0
+                return
+
             # Determine max_speed based on context (intersection or straight road)
-            current_max_speed = self.max_intersection_speed if self.status == "INTERSECTION" else self.max_speed
+            current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
             
             new_acceleration = self.beta * (1- self.speed/current_max_speed) - self.alpha * (1-d/self.detection_range)
-            if self.selected and new_acceleration < 0:
-                print(new_acceleration, self.speed)
             ### make sure acceleration shift is not too important, if it is clamp
             if new_acceleration > self.acceleration:
                 self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
@@ -159,9 +203,12 @@ class Car:
             
 
         # --- Mise à jour de la position ---
-        self.speed += self.acceleration
+        self.speed += self.acceleration * time_factor
         # max_speed was already determined above for the acceleration calculation
         self.speed = max(0, min(self.speed, current_max_speed))
+
+        if self.speed == current_max_speed or self.speed == 0:
+            self.acceleration = 0
 
         speed = self.speed
         if self.speed < 0.2:
@@ -170,7 +217,7 @@ class Car:
 
         self.acceleration = min(max(self.acceleration, -0.3), 0.3)
             
-        self.pos += self.dir * speed
+        self.pos += self.dir * speed * time_factor
 
     def get_next_target_extremity(self):
         self.path.pop(0)        
@@ -181,6 +228,9 @@ class Car:
         if self.status=="INTERSECTION" and self.reached_last_intersection_target:
             self.reached_last_intersection_target = False
             self.status = "EXITING"
+            self.last_extremity = self.current_target_extremity
+
+
             return self.current_target_extremity.get_start_car_pos_dir(delta=-5)[0]
         
         elif self.status=="INTERSECTION":  # is in intersection
@@ -199,6 +249,13 @@ class Car:
             next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index, car=self)
             self.current_target_index += 1
             self.status = "INTERSECTION"
+
+                        
+            self.detection_range = self.detection_range_angular
+            self.detection_angle_threshold = self.detection_angle_threshold_angular
+
+
+
             return next_target_pos
     
         elif self.status=="EXITING":
@@ -206,6 +263,10 @@ class Car:
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             self.status="APPROACHING"
+
+            self.detection_range = self.detection_range_normal
+            self.detection_angle_threshold = self.detection_angle_threshold_normal
+
             return self.last_extremity.get_end_car_pos_dir()[0]
         
         else:   # Entering intersection
@@ -267,7 +328,7 @@ class Car:
                     pygame.draw.circle(win, (255, 255, 255), transformed_debug_target_delta, debug_circle_radius)
             except (AttributeError, TypeError, IndexError): pass
 
-            d = self.check_front()
+            d = self.check_front()[0]
             color_value = 0
             # self.detection_range is in world units, no direct scaling here for the logic.
             if d == math.inf or self.detection_range == 0:
