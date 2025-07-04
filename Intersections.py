@@ -124,7 +124,7 @@ class ClassicRoundabout(Intersection):
             if self.cars_between_targets[btw_index]:
                 # Check for slow-moving cars in critical segments
                 for car_in_segment in self.cars_between_targets[btw_index]:
-                    if car_in_segment.speed < 0.5: # Speed threshold
-                        return False # Block entry if a car is too slow
-                return False # Block entry if segment is occupied (original check)
+                    if car_in_segment.speed > 0.25 or i < 2: # Speed threshold
+                        return False 
+                    
         return True

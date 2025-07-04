@@ -45,10 +45,10 @@ class Car:
 
         
         self.detection_range_normal = self.car_height * 2.5
-        self.detection_angle_threshold_normal = 4.0 
+        self.detection_angle_threshold_normal = 25.0 
 
         self.detection_range_angular = self.car_height * 1.7
-        self.detection_angle_threshold_angular = 20.0
+        self.detection_angle_threshold_angular = 35.0
         
         self.detection_range = self.detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
@@ -76,27 +76,24 @@ class Car:
 
     def check_front(self):
         
-        original_detection_angle_threshold = self.detection_angle_threshold
-        # Temporarily increase detection angle if car is in intersection or approaching
-        if self.status == "INTERSECTION" or self.status == "APPROACHING":
-            self.detection_angle_threshold *= 1.5
-
         closest_car_distance = math.inf # Initialise avec l'infini pour trouver le minimum
         car = None
 
         for other_car in self.simulator.cars:
-            if other_car is self or (other_car.status == "APPROACHING" and self.status != "APPROACHING"):
+            if other_car is self or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
                 continue
             
-            start_pos = self.pos+self.dir*self.car_height//2
+            start_pos = self.pos+self.dir*self.car_height/2
             vector_to_other = other_car.pos - start_pos
             distance = vector_to_other.length()
             if 0 < distance < self.detection_range:
+
                 if vector_to_other.length_squared() > 1e-6: 
                     try:
                         angle = self.dir.angle_to(vector_to_other)
-
+                        angle = (angle + 180) % 360 - 180
                         if abs(angle) < self.detection_angle_threshold:
+ 
                             # La voiture est devant et dans la portée
                             if distance < closest_car_distance:
                                 closest_car_distance = distance
@@ -105,12 +102,10 @@ class Car:
                          print(f"Warning: ValueError pendant le calcul d'angle pour la voiture à {self.pos}")
                          continue # Passer à la voiture suivante
 
-        self.detection_angle_threshold = original_detection_angle_threshold # Restore original detection angle
         return closest_car_distance, car
 
     def move(self, dt):
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 1
-        print(time_factor)
 
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
@@ -191,11 +186,9 @@ class Car:
                 return
 
             # Determine max_speed based on context (intersection or straight road)
-            current_max_speed = self.max_intersection_speed if self.status == "INTERSECTION" else self.max_speed
+            current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
             
             new_acceleration = self.beta * (1- self.speed/current_max_speed) - self.alpha * (1-d/self.detection_range)
-            if self.selected and new_acceleration < 0:
-                print(new_acceleration, self.speed)
             ### make sure acceleration shift is not too important, if it is clamp
             if new_acceleration > self.acceleration:
                 self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
@@ -213,6 +206,9 @@ class Car:
         self.speed += self.acceleration * time_factor
         # max_speed was already determined above for the acceleration calculation
         self.speed = max(0, min(self.speed, current_max_speed))
+
+        if self.speed == current_max_speed or self.speed == 0:
+            self.acceleration = 0
 
         speed = self.speed
         if self.speed < 0.2:
