@@ -8,6 +8,9 @@ class Intersection:
         self.pos = Vec2(pos)
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
+        self.cars_passed_through = 0
+        self.cars_congested_locally = 0
+        self.local_congestion_factor = 0.0
         
 
     def update(self, dt):
@@ -26,6 +29,25 @@ class Intersection:
     def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
         #return next_target_pos, is_last_pos
         pass
+
+    def get_min_crossing_time(self):
+        """
+        Estimates the minimum time to cross this intersection.
+        This should be overridden by subclasses with a more specific calculation.
+        Returns time in seconds.
+        """
+        # Generic estimation, perhaps based on a typical fixed time or a simple distance/speed calc if possible
+        return 2.0 # Default: 2 seconds, very rough estimate
+
+    def register_car_passed(self):
+        self.cars_passed_through += 1
+        if self.cars_passed_through > 0:
+            self.local_congestion_factor = self.cars_congested_locally / self.cars_passed_through
+
+    def register_local_congestion(self):
+        self.cars_congested_locally += 1
+        if self.cars_passed_through > 0: # Should always be true if a car caused congestion
+            self.local_congestion_factor = self.cars_congested_locally / self.cars_passed_through
         
 class ClassicRoundabout(Intersection):
     def __init__(self, pos, radius, exits_dir):
@@ -56,7 +78,17 @@ class ClassicRoundabout(Intersection):
         scaled_lane_width = self.simulator.camera.get_scaled_value(LANE_WIDTH)
         scaled_stripe_width = max(1, int(self.simulator.camera.get_scaled_value(STRIPE_WIDTH)))
 
-        pygame.draw.circle(win, ROAD_COLOR, transformed_center, scaled_radius)
+        # Determine color based on local congestion factor
+        # Interpolate from green (0% congestion) to red (100% congestion)
+        current_road_color = ROAD_COLOR
+        if self.simulator.debug:
+            congestion_ratio = min(self.local_congestion_factor, 1.0) # Cap at 1.0 for color calculation
+            red_color = int(255 * congestion_ratio)
+            green_color = int(255 * (1 - congestion_ratio))
+            blue_color = 0
+            current_road_color = (red_color, green_color, blue_color)
+
+        pygame.draw.circle(win, current_road_color, transformed_center, scaled_radius) # Use dynamic color
         inner_radius = scaled_radius - self.nb_lanes * scaled_lane_width
         if inner_radius < 0 : inner_radius = 0 # Prevent negative radius
         pygame.draw.circle(win, BACKGROUND_COLOR, transformed_center, inner_radius)
@@ -64,6 +96,16 @@ class ClassicRoundabout(Intersection):
         pygame.draw.circle(win, (255, 255, 255), transformed_center, scaled_radius, scaled_stripe_width)
         if inner_radius > 0: # Only draw inner stripe if visible
              pygame.draw.circle(win, (255, 255, 255), transformed_center, inner_radius, scaled_stripe_width)
+
+        # Display local congestion factor as text
+        if self.simulator.debug: # Always show for now, or tie to debug flag
+            font = self.simulator.font # Assuming simulator has a font preloaded
+            text_surface = font.render(f"{self.local_congestion_factor:.2f}", True, (255, 255, 255)) # White text
+            # Position text near the intersection's center, adjusted for camera
+            text_pos_x = transformed_center.x - text_surface.get_width() // 2
+            text_pos_y = transformed_center.y - scaled_radius - text_surface.get_height() # Above the roundabout
+            win.blit(text_surface, (text_pos_x, text_pos_y))
+
 
         if self.simulator.debug:
             debug_radius = max(1, int(self.simulator.camera.get_scaled_value(4)))
@@ -128,3 +170,28 @@ class ClassicRoundabout(Intersection):
                         return False 
                     
         return True
+
+    def get_min_crossing_time(self):
+        """
+        Estimates the minimum time to cross the roundabout.
+        Assumes car travels roughly half the circumference at max_intersection_speed.
+        Returns time in seconds.
+        """
+        # Approximate distance: half circumference
+        distance = math.pi * (self.radius - LANE_WIDTH / 2)
+
+        # Max speed in intersection is defined in Car.py, e.g., self.max_intersection_speed
+        # We need a reference to a car's typical max_intersection_speed or define a standard one.
+        # Let's assume a typical car's max_intersection_speed.
+        # From Car.py: self.max_intersection_speed = 2.0 (units/tick)
+        # This speed is in units per simulation tick (e.g., 1/60th of a second if FPS is 60).
+        typical_max_intersection_speed_units_per_tick = 2.0
+
+        if typical_max_intersection_speed_units_per_tick <= 0:
+            return float('inf') # Avoid division by zero
+
+        time_in_ticks = distance / typical_max_intersection_speed_units_per_tick
+
+        # Convert ticks to seconds (assuming a tick is ~16.66ms for 60 FPS target)
+        time_in_seconds = time_in_ticks * (16.666 / 1000.0)
+        return time_in_seconds

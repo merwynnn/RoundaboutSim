@@ -6,3 +6,7 @@ LANE_WIDTH = 25
 STRIPE_WIDTH = 3
 
 DEBUG = False
+
+# Congestion thresholds
+MACRO_CONGESTION_THRESHOLD = 1.8  # Example: 50% more time than minimal
+LOCAL_CONGESTION_THRESHOLD = 1.8  # Example: 50% more time than minimal

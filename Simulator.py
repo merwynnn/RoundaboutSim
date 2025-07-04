@@ -3,6 +3,8 @@ from pygame import Vector2 as Vec2
 import sys
 import random # For random spawning
 from collections import deque
+import time
+import matplotlib.pyplot as plt
 from Constants import *
 from Road import Road, RoadExtremity
 from Car import Car
@@ -47,10 +49,21 @@ class Simulator:
         self.debug = False
         self.selected_car = None # Track the currently selected car
 
+        # Congestion tracking
+        self.total_cars_spawned_count = 0
+        self.total_cars_congested_macro_count = 0
+        self.global_congestion_factor = 0.0
+
         # Font for debug text
         self.font = pygame.font.Font(None, 24)
 
         self.render_as_rect = False
+
+        # Data recording
+        self.car_count_data = []
+        self.start_time = time.time()
+        self.last_record_time = 0
+        self.record_interval = 0.5 # seconds
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
         # --- Your existing setup code ---
@@ -130,6 +143,8 @@ class Simulator:
                     self.debug = not self.debug # Toggle debug mode
                 if event.key == pygame.K_r:
                     self.render_as_rect = not self.render_as_rect
+                if event.key == pygame.K_p:
+                    self.plot_car_count()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1: # Left click
                     world_mouse_pos = self.camera.screen_to_world(pygame.math.Vector2(event.pos)) # Added
@@ -168,6 +183,13 @@ class Simulator:
         for road_extremity in self.road_extremity_spawners:
             road_extremity.update(dt)
 
+        # Record car count data
+        current_time = time.time()
+        if current_time - self.last_record_time > self.record_interval:
+            elapsed_time = current_time - self.start_time
+            self.car_count_data.append((elapsed_time, len(self.cars)))
+            self.last_record_time = current_time
+
         if self.selected_car and self.debug:
             self.draw_debug_panel()
 
@@ -190,9 +212,12 @@ class Simulator:
         else:
                 debug_info.append(f"Can Enter Int: N/A")
 
+        # Add global congestion factor to debug panel (or a general info panel)
+        debug_info.append(f"Global Congestion: {self.global_congestion_factor:.2f}")
+
 
         debug_rect_width = 200
-        debug_rect_height = 180
+        debug_rect_height = 200 # Increased height for new line
         debug_rect_x = WIDTH - debug_rect_width - 10
         debug_rect_y = 10
 
@@ -264,6 +289,19 @@ class Simulator:
 
 
     def car_reached_destination(self, car):
+        import time # For current time
+        actual_travel_time = time.time() - car.start_time
+        min_travel_time = car.calculate_min_travel_time()
+
+        if min_travel_time > 0: # Avoid division by zero if path was instantaneous or invalid
+            if actual_travel_time > min_travel_time * MACRO_CONGESTION_THRESHOLD:
+                self.total_cars_congested_macro_count += 1
+                # print(f"Car {id(car)} was MACRO congested. Actual: {actual_travel_time:.2f}s, Min: {min_travel_time:.2f}s")
+
+        if self.total_cars_spawned_count > 0 : # total_cars_spawned_count is incremented in spawn_car before this can be an issue for a just spawned car
+             self.global_congestion_factor = self.total_cars_congested_macro_count / self.total_cars_spawned_count
+
+
         # Check if the car object exists in the list before attempting removal
         if car in self.cars:
             self.cars.remove(car)
@@ -272,7 +310,23 @@ class Simulator:
         # print("Car reached destination and was removed.") # For debugging
 
 
+    def plot_car_count(self):
+        if not self.car_count_data:
+            print("No data to plot.")
+            return
+
+        times, car_counts = zip(*self.car_count_data)
+        
+        plt.figure()
+        plt.plot(times, car_counts)
+        plt.xlabel("Time (s)")
+        plt.ylabel("Number of Cars")
+        plt.title("Number of Cars Over Time")
+        plt.grid(True)
+        plt.show()
+
     def spawn_car(self, start_extremity):
+        self.total_cars_spawned_count +=1
         # Choose a random end extremity that is NOT the start extremity or on the same road
         possible_ends = [
             ext for ext in self.road_extremity_spawners if ext != start_extremity
@@ -300,6 +354,7 @@ class Simulator:
             # ensure it uses the passed end_extremity or remove the internal call.
             # Let's assume Car uses the provided final_target_extremity.
             self.cars.append(new_car)
+            return new_car
             # print(f"Spawned car from {start_extremity.pos} to {end_extremity.pos}") # For debugging
         else:
             print(f"Warning: Could not generate path for new car from {start_extremity.pos} to {end_extremity.pos}. Car not spawned.")
