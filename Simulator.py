@@ -8,6 +8,7 @@ from Road import Road, RoadExtremity
 from Car import Car
 from Camera import Camera # Added
 from Intersections import *
+from FlowManager import FlowManager
 import os
 
 class Simulator:
@@ -41,24 +42,29 @@ class Simulator:
         self.camera = Camera(WIDTH, HEIGHT) # Added
         self.initialized = False
 
+        self.flow_manager = FlowManager()
+
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
 
         self.debug = False
         self.selected_car = None # Track the currently selected car
 
-        # Font for debug text
-        self.font = pygame.font.Font(None, 24)
-
         self.render_as_rect = False
+
+        self.total_cars_spawned_count = 0
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
         # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
         self.roads = roads if roads is not None else []
         self.road_extremity_spawners = road_extremity_spawners if road_extremity_spawners is not None else []
-        for road_extremity_spawner in self.road_extremity_spawners:
-            road_extremity_spawner.simulator = self
+        self.spawners_by_id = {spawner.id: spawner for spawner in self.road_extremity_spawners}
+
+        for spawner in self.road_extremity_spawners:
+            spawn_interval = self.flow_manager.get_spawn_interval(spawner.id)
+            if spawn_interval is not None:
+                spawner.spawn_cars_timer = spawn_interval
 
         for road in self.roads:
             road.start_extremity.road = road
@@ -200,7 +206,7 @@ class Simulator:
         pygame.draw.rect(self.win, (0, 0, 0), (debug_rect_x, debug_rect_y, debug_rect_width, debug_rect_height), 2)
 
         for i, line in enumerate(debug_info):
-            text_surface = self.font.render(line, True, (0, 0, 0))
+            text_surface = font.render(line, True, (0, 0, 0))
             self.win.blit(text_surface, (debug_rect_x + 10, debug_rect_y + 10 + i * 20))
 
     def generate_path(self, start_extremity, end_extremity):
@@ -273,21 +279,18 @@ class Simulator:
 
 
     def spawn_car(self, start_extremity):
-        # Choose a random end extremity that is NOT the start extremity or on the same road
-        possible_ends = [
-            ext for ext in self.road_extremity_spawners if ext != start_extremity
-        ]
+        self.total_cars_spawned_count += 1
+        destination_id = self.flow_manager.get_destination(start_extremity.id)
 
-        if not possible_ends:
-             # Fallback or specific logic if no suitable random end found
-             # For the simple case, let's use the predefined ext2 if available
-             end_extremity = self.roads[1].end_extremity if len(self.roads) > 1 else None
-             # print("Warning: No random end extremity found, using default.")
-             if not end_extremity or end_extremity == start_extremity:
-                  print("Error: Cannot determine a valid end extremity for spawning car.")
-                  return # Don't spawn if no valid end
-        else:
-             end_extremity = random.choice(possible_ends)
+        if destination_id is None:
+            print(f"Warning: Could not determine destination for car from {start_extremity.id}. Car not spawned.")
+            return
+
+        end_extremity = self.spawners_by_id.get(destination_id)
+
+        if end_extremity is None:
+            print(f"Warning: Destination extremity '{destination_id}' not found. Car not spawned.")
+            return
 
 
         # Generate the path for the new car

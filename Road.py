@@ -3,8 +3,17 @@ import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
 
+
+
 class RoadExtremity:
+    next_id = 0
     def __init__(self,pos=(0, 0),intersection = None, road = None, spawn_cars=False, spawn_cars_timer=5):
+
+    
+        self.id = None
+        if spawn_cars:
+            self.id = RoadExtremity.next_id
+            RoadExtremity.next_id += 1
 
     
         self.pos = Vec2(pos)
@@ -15,6 +24,9 @@ class RoadExtremity:
         self.spawn_cars_timer = spawn_cars_timer
         self.timer = 0
 
+     
+        self.last_spawned_car = None
+
             
     def update(self, dt):
         if self.spawn_cars:
@@ -22,7 +34,11 @@ class RoadExtremity:
             if self.timer >= self.spawn_cars_timer:
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
-                Simulator.get_instance().spawn_car(self)
+                if self.last_spawned_car:
+                    if (self.last_spawned_car.pos - self.pos).length() > 20:
+                        self.last_spawned_car = Simulator.get_instance().spawn_car(self)
+                else:
+                    self.last_spawned_car = Simulator.get_instance().spawn_car(self)
                 self.timer = 0
                 
 
@@ -112,15 +128,19 @@ class Road:
             pygame.draw.line(win, (255, 255, 255), p1_stripe_transformed, p2_stripe_transformed, STRIPE_WIDTH) # STRIPE_WIDTH will be scaled later
 
         if self.simulator.debug:
-            # Debug circles radii will be scaled later
-            transformed_center_00 = self.simulator.camera.apply(self.lanes_start_end_position[0][0])
-            pygame.draw.circle(win, (255, 0, 0), transformed_center_00, 5)
-            transformed_center_01 = self.simulator.camera.apply(self.lanes_start_end_position[0][1])
-            pygame.draw.circle(win, (255, 0, 0), transformed_center_01, 5)
-            transformed_center_10 = self.simulator.camera.apply(self.lanes_start_end_position[1][0])
-            pygame.draw.circle(win, (0, 255, 0), transformed_center_10, 5)
-            transformed_center_11 = self.simulator.camera.apply(self.lanes_start_end_position[1][1])
-            pygame.draw.circle(win, (0, 255, 0), transformed_center_11, 5)
+
+            # Show road extremities index
+            if self.start_extremity.spawn_cars:
+                text = font_medium.render(str(self.start_extremity.id), True, (0, 0, 0))
+                text_rect = text.get_rect()
+                text_rect.center = self.simulator.camera.apply(self.start_extremity.pos)
+                win.blit(text, text_rect)
+
+            if self.end_extremity.spawn_cars:
+                text = font_medium.render(str(self.end_extremity.id), True, (0, 0, 0))
+                text_rect = text.get_rect()
+                text_rect.center = self.simulator.camera.apply(self.end_extremity.pos)
+                win.blit(text, text_rect)
 
     
     def update(self, dt):

@@ -19,6 +19,7 @@ simulator = Simulator(win)
 car_flow_rate = 120
 
 def create_grid_setup(n, m):
+    RoadExtremity.next_id = 0
     intersections = []
     roads = []
     road_extremity_spawners = []
@@ -107,7 +108,7 @@ def create_grid_setup(n, m):
 
 time_multiplier = 1
 while True:
-    dt = clock.tick(60) * time_multiplier # Delta time in milliseconds
+    dt = time_multiplier*2
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:
