@@ -15,6 +15,27 @@ class FlowManager:
         except Exception as e:
             print(f"Error loading configuration file: {e}")
 
+    def set_active_spawners(self, active_spawner_ids):
+        if self.flow_matrix is not None:
+            # Format IDs to match the Excel file format 'spawner_X'
+            formatted_spawner_ids = [f"spawner_{_id}" for _id in active_spawner_ids]
+            
+            # Filter columns (starters)
+            self.flow_matrix = self.flow_matrix[
+                [col for col in self.flow_matrix.columns if col in formatted_spawner_ids]
+            ]
+            # Filter rows (destinations)
+            self.flow_matrix = self.flow_matrix[
+                self.flow_matrix.index.isin(formatted_spawner_ids)
+            ]
+
+        if self.flow_rates is not None:
+            # Filter flow rates
+            formatted_spawner_ids = [f"spawner_{_id}" for _id in active_spawner_ids]
+            self.flow_rates = self.flow_rates[
+                self.flow_rates.index.isin(formatted_spawner_ids)
+            ]
+
     def get_destination(self, start_extremity_id_int):
         start_extremity_id = f"spawner_{start_extremity_id_int}"
         if self.flow_matrix is None:

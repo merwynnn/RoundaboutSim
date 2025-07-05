@@ -8,6 +8,7 @@ class Intersection:
         self.pos = Vec2(pos)
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
+        self.exists = []
         
 
     def update(self, dt):
@@ -128,3 +129,124 @@ class ClassicRoundabout(Intersection):
                         return False 
                     
         return True
+
+class RedLightIntersection(Intersection):
+    def __init__(self, pos, exits_dir, light_duration=5, yellow_light_duration=1):
+        super().__init__(pos)
+        self.exits_dir = exits_dir
+        self.lights = {}  # N, E, S, W
+        self.exits = []
+        for i, exit_dir in enumerate(exits_dir):
+            self.lights[tuple(exit_dir)] = "red"
+            self.exits.append(RoadExtremity(self.pos + exit_dir * (LANE_WIDTH*2), self))
+
+
+        self.light_duration = light_duration
+        self.yellow_light_duration = yellow_light_duration
+        self.timer = 0
+        self.current_green_pair = (tuple(self.exits_dir[0]), tuple(self.exits_dir[2]))  # N-S green initially
+
+    def update(self, dt):
+        self.timer += dt / 1000.0  # Convert dt from ms to seconds
+
+        total_cycle_time = self.light_duration + self.yellow_light_duration
+
+        # Set all to red before green phase
+        for exit_dir in self.exits_dir:
+            self.lights[tuple(exit_dir)] = "red"
+
+
+        if self.timer < self.light_duration:
+            # Green light phase
+            self.lights[self.current_green_pair[0]] = "green"
+            self.lights[self.current_green_pair[1]] = "green"
+        elif self.timer < total_cycle_time:
+            # Yellow light phase
+            self.lights[self.current_green_pair[0]] = "yellow"
+            self.lights[self.current_green_pair[1]] = "yellow"
+        else:
+            # Switch to the other pair of lights
+            self.lights[self.current_green_pair[0]] = "red"
+            self.lights[self.current_green_pair[1]] = "red"
+            
+            # Toggle between N-S and E-W pairs
+            if self.current_green_pair == (tuple(self.exits_dir[0]), tuple(self.exits_dir[2])):
+                self.current_green_pair = (tuple(self.exits_dir[1]), tuple(self.exits_dir[3]))
+            else:
+                self.current_green_pair = (tuple(self.exits_dir[0]), tuple(self.exits_dir[2]))
+            
+            self.timer = 0  # Reset timer for the new cycle
+
+    def can_car_enter(self, start_extremity):
+        incoming_dir = start_extremity.road.dir if start_extremity.road.end_extremity == start_extremity else -start_extremity.road.dir
+        
+        # Find the closest exit_dir to the incoming_dir
+        closest_dir = None
+        min_angle = float('inf')
+        for exit_dir in self.exits_dir:
+            angle = abs(incoming_dir.angle_to(exit_dir))
+            if angle < min_angle:
+                min_angle = angle
+                closest_dir = exit_dir
+
+        return self.lights.get(tuple(closest_dir)) == "green"
+
+    def draw(self, win):
+        # Draw the intersection asphalt
+        size = LANE_WIDTH * 2
+        p1 = self.pos + Vec2(-size / 2, -size / 2)
+        p2 = self.pos + Vec2(size / 2, -size / 2)
+        p3 = self.pos + Vec2(size / 2, size / 2)
+        p4 = self.pos + Vec2(-size / 2, size / 2)
+
+        p1_transformed = self.simulator.camera.apply(p1)
+        p2_transformed = self.simulator.camera.apply(p2)
+        p3_transformed = self.simulator.camera.apply(p3)
+        p4_transformed = self.simulator.camera.apply(p4)
+
+        pygame.draw.polygon(win, ROAD_COLOR, [p1_transformed, p2_transformed, p3_transformed, p4_transformed])
+
+        # Draw the traffic lights
+        light_radius = self.simulator.camera.get_scaled_value(5)
+        for exit_dir_tuple, state in self.lights.items():
+            exit_dir = Vec2(exit_dir_tuple)
+            # Position the light near the intersection edge
+            light_pos = self.pos + exit_dir * (size / 2)
+            transformed_light_pos = self.simulator.camera.apply(light_pos)
+
+            color = (128, 128, 128) # Grey for off
+            if state == "red":
+                color = (255, 0, 0)
+            elif state == "yellow":
+                color = (255, 255, 0)
+            elif state == "green":
+                color = (0, 255, 0)
+            
+            pygame.draw.circle(win, color, transformed_light_pos, light_radius)
+
+    def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
+        start_pos, start_dir = start_extremity.get_end_car_pos_dir()
+        end_pos, end_dir = exit_extremity.get_start_car_pos_dir()
+
+        # Determine the path based on start and end points
+        # This is a simplified path generation. For more complex intersections, you might need a more sophisticated approach.
+        
+        # Path for straight
+        path = [start_pos, end_pos]
+        
+        # Check for turns
+        if start_dir.dot(end_dir) < 0.1: # Right or Left turn
+            # Simple curve for turning, could be improved with Bezier curves
+            control_point = self.pos
+            
+            # This is a very basic approximation for a turn path.
+            # A real implementation might need to calculate intermediate points on a curve.
+            path = [start_pos, control_point, end_pos]
+
+
+        is_last_pos = current_target_index >= len(path) - 1
+        
+        if is_last_pos:
+            return end_pos, True
+        else:
+            return path[current_target_index], False

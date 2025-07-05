@@ -61,6 +61,10 @@ class Simulator:
         self.road_extremity_spawners = road_extremity_spawners if road_extremity_spawners is not None else []
         self.spawners_by_id = {spawner.id: spawner for spawner in self.road_extremity_spawners}
 
+        # Pass active spawner IDs to the FlowManager
+        active_spawner_ids = [spawner.id for spawner in self.road_extremity_spawners]
+        self.flow_manager.set_active_spawners(active_spawner_ids)
+
         for spawner in self.road_extremity_spawners:
             spawn_interval = self.flow_manager.get_spawn_interval(spawner.id)
             if spawn_interval is not None:

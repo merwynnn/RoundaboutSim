@@ -138,12 +138,31 @@ while True:
                 road_extremity_spawners_0 = [ext1, ext2, ext_3, ext_4]
                 simulator.initialize(intersections_0, roads_0, road_extremity_spawners_0)
             elif event.key == pygame.K_2:
-                ext1_1 = RoadExtremity((0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext2_1 = RoadExtremity((WIDTH, HEIGHT//2), spawn_cars=False, spawn_cars_timer=car_flow_rate)
-                roads_1 = [Road(ext1_1, ext2_1)]
+                # Red Light Intersection setup
+                intersection_pos = (WIDTH // 2, HEIGHT // 2)
+                exits_dir = [Vec2(0, -1), Vec2(1, 0), Vec2(0, 1), Vec2(-1, 0)] # N, E, S, W
+                red_light_intersection = RedLightIntersection(intersection_pos, exits_dir)
 
-                road_extremity_spawners_1 = [ext1_1, ext2_1]
-                simulator.initialize([], roads_1, road_extremity_spawners_1)
+                # Road extremities
+                ext_n = RoadExtremity((WIDTH // 2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                ext_e = RoadExtremity((WIDTH, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                ext_s = RoadExtremity((WIDTH // 2, HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                ext_w = RoadExtremity((0, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+                
+                # Roads connecting extremities to the intersection
+                roads_2 = [
+                    Road(ext_n, red_light_intersection.exits[0]),
+                    Road(ext_e, red_light_intersection.exits[1]),
+                    Road(ext_s, red_light_intersection.exits[2]),
+                    Road(ext_w, red_light_intersection.exits[3]),
+                    Road(red_light_intersection.exits[0], ext_n),
+                    Road(red_light_intersection.exits[1], ext_e),
+                    Road(red_light_intersection.exits[2], ext_s),
+                    Road(red_light_intersection.exits[3], ext_w)
+                ]
+
+                road_extremity_spawners_2 = [ext_n, ext_e, ext_s, ext_w]
+                simulator.initialize([red_light_intersection], roads_2, road_extremity_spawners_2)
             elif event.key == pygame.K_3:
                 n_rows = 2
                 m_cols = 2
