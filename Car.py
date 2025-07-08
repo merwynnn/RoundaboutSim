@@ -348,20 +348,9 @@ class Car:
             debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(1)))
 
             if self.current_target_position:
-                if hasattr(self.last_extremity, 'get_end_car_pos_dir'):
-                    try:
-                        target_pos_to_draw = self.last_extremity.get_end_car_pos_dir(delta=-10)[0]
-                        transformed_debug_target = self.simulator.camera.apply(target_pos_to_draw)
-                        pygame.draw.circle(win, (0, 0, 255), transformed_debug_target, debug_circle_radius)
-                    except (AttributeError, TypeError, IndexError): pass
-
-            try:
-                if hasattr(self.last_extremity, 'get_end_car_pos_dir'):
-                    transformed_debug_intersection = self.simulator.camera.apply(self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0])
-                    pygame.draw.circle(win, (255, 0, 255), transformed_debug_intersection, debug_circle_radius)
-                    transformed_debug_target_delta = self.simulator.camera.apply(self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0])
-                    pygame.draw.circle(win, (255, 255, 255), transformed_debug_target_delta, debug_circle_radius)
-            except (AttributeError, TypeError, IndexError): pass
+                target_pos_to_draw = self.current_target_position
+                transformed_debug_target = self.simulator.camera.apply(target_pos_to_draw)
+                pygame.draw.circle(win, (0, 0, 255), transformed_debug_target, debug_circle_radius)
 
             d = self.check_front()[0]
             color_value = 0

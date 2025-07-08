@@ -35,14 +35,14 @@ class Simulator:
             images.append(img)
         return images
 
-    def __init__(self, win=None):
+    def __init__(self, win=None, config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
         Simulator._instance = self
         self.win = win
         from Constants import WIDTH, HEIGHT # Make sure WIDTH and HEIGHT are imported
         self.camera = Camera(WIDTH, HEIGHT) # Added
         self.initialized = False
 
-        self.flow_manager = FlowManager()
+        self.flow_manager = FlowManager(spawn_intervall_multiplier=spawn_intervall_multiplier, config_file=config_file)
 
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()

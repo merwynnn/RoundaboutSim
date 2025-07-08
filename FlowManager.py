@@ -3,10 +3,13 @@ import numpy as np
 
 class FlowManager:
     SEED = 123
-    def __init__(self, config_file='flow_config.xlsx'):
+    def __init__(self, config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
         self.flow_matrix = None
         self.flow_rates = None
         self.random_state = np.random.RandomState(self.SEED) if self.SEED is not None else None
+
+        self.spawn_intervall_multiplier = spawn_intervall_multiplier
+
         try:
             self.flow_matrix = pd.read_excel(config_file, sheet_name='flow_matrix', index_col=0)
             self.flow_rates = pd.read_excel(config_file, sheet_name='flow_rates', index_col=0)
@@ -63,7 +66,7 @@ class FlowManager:
             return None
         
         try:
-            return self.flow_rates.loc[extremity_id, 'spawn_interval']
+            return self.flow_rates.loc[extremity_id, 'spawn_interval']*self.spawn_intervall_multiplier
         except KeyError:
             print(f"Warning: Extremity ID '{extremity_id}' not found in flow rates.")
             return None

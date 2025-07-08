@@ -131,20 +131,21 @@ class ClassicRoundabout(Intersection):
         return True
 
 class RedLightIntersection(Intersection):
-    def __init__(self, pos, exits_dir, light_duration=5, yellow_light_duration=1):
+    def __init__(self, pos, exits_dir, light_duration=5, yellow_light_duration=1, size=LANE_WIDTH*6):
         super().__init__(pos)
+        self.size = size
         self.exits_dir = exits_dir
         self.lights = {}  # N, E, S, W
         self.exits = []
         for i, exit_dir in enumerate(exits_dir):
             self.lights[tuple(exit_dir)] = "red"
-            self.exits.append(RoadExtremity(self.pos + exit_dir * (LANE_WIDTH*2), self))
+            self.exits.append(RoadExtremity(self.pos + exit_dir * (self.size / 2), self))
 
 
         self.light_duration = light_duration
         self.yellow_light_duration = yellow_light_duration
         self.timer = 0
-        self.current_green_pair = (tuple(self.exits_dir[0]), tuple(self.exits_dir[2]))  # N-S green initially
+        self.current_green_pair = (tuple(self.exits_dir[2]), tuple(self.exits_dir[3]))  # N-S green initially
 
     def update(self, dt):
         self.timer += dt / 1000.0  # Convert dt from ms to seconds
@@ -170,10 +171,10 @@ class RedLightIntersection(Intersection):
             self.lights[self.current_green_pair[1]] = "red"
             
             # Toggle between N-S and E-W pairs
-            if self.current_green_pair == (tuple(self.exits_dir[0]), tuple(self.exits_dir[2])):
-                self.current_green_pair = (tuple(self.exits_dir[1]), tuple(self.exits_dir[3]))
+            if self.current_green_pair == (tuple(self.exits_dir[2]), tuple(self.exits_dir[3])):
+                self.current_green_pair = (tuple(self.exits_dir[0]), tuple(self.exits_dir[1]))
             else:
-                self.current_green_pair = (tuple(self.exits_dir[0]), tuple(self.exits_dir[2]))
+                self.current_green_pair = (tuple(self.exits_dir[2]), tuple(self.exits_dir[3]))
             
             self.timer = 0  # Reset timer for the new cycle
 
@@ -185,6 +186,7 @@ class RedLightIntersection(Intersection):
         min_angle = float('inf')
         for exit_dir in self.exits_dir:
             angle = abs(incoming_dir.angle_to(exit_dir))
+            angle = (angle + 180) % 360 - 180
             if angle < min_angle:
                 min_angle = angle
                 closest_dir = exit_dir
@@ -193,7 +195,7 @@ class RedLightIntersection(Intersection):
 
     def draw(self, win):
         # Draw the intersection asphalt
-        size = LANE_WIDTH * 2
+        size = self.size
         p1 = self.pos + Vec2(-size / 2, -size / 2)
         p2 = self.pos + Vec2(size / 2, -size / 2)
         p3 = self.pos + Vec2(size / 2, size / 2)
@@ -211,7 +213,7 @@ class RedLightIntersection(Intersection):
         for exit_dir_tuple, state in self.lights.items():
             exit_dir = Vec2(exit_dir_tuple)
             # Position the light near the intersection edge
-            light_pos = self.pos + exit_dir * (size / 2)
+            light_pos = self.pos + exit_dir * (self.size / 2)
             transformed_light_pos = self.simulator.camera.apply(light_pos)
 
             color = (128, 128, 128) # Grey for off
@@ -225,24 +227,26 @@ class RedLightIntersection(Intersection):
             pygame.draw.circle(win, color, transformed_light_pos, light_radius)
 
     def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
-        start_pos, start_dir = start_extremity.get_end_car_pos_dir()
+        """current_target_index is the index of the target to reach (starting from 0)"""
+
+        start_pos, start_dir = start_extremity.get_other_extremity().get_end_car_pos_dir()
         end_pos, end_dir = exit_extremity.get_start_car_pos_dir()
 
-        # Determine the path based on start and end points
-        # This is a simplified path generation. For more complex intersections, you might need a more sophisticated approach.
-        
-        # Path for straight
-        path = [start_pos, end_pos]
-        
-        # Check for turns
-        if start_dir.dot(end_dir) < 0.1: # Right or Left turn
-            # Simple curve for turning, could be improved with Bezier curves
-            control_point = self.pos
-            
-            # This is a very basic approximation for a turn path.
-            # A real implementation might need to calculate intermediate points on a curve.
-            path = [start_pos, control_point, end_pos]
+        dot_product = start_dir.dot(end_dir)
+        cross_product = start_dir.cross(end_dir)
 
+        # Straight
+        if cross_product == 0:
+            return end_pos, True
+        
+        # Right turn
+        elif cross_product > 0.9:
+            control_point = start_pos + start_dir * self.size * 0.3
+            path = [start_pos, control_point, end_pos]
+        # Left turn
+        else:
+            control_point1 = start_pos + start_dir * self.size *0.4
+            path = [start_pos, control_point1, self.pos, end_pos]
 
         is_last_pos = current_target_index >= len(path) - 1
         
