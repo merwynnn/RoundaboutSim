@@ -5,9 +5,11 @@ import math
 
 class Car:
     
-    def __init__(self, path, car_image=None):
+    def __init__(self, path, creation_tick, car_image=None):
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
+
+        self.creation_tick = creation_tick
 
         self.pos, self.dir = path[0].get_start_car_pos_dir()
 
@@ -79,7 +81,8 @@ class Car:
         closest_car_distance = math.inf # Initialise avec l'infini pour trouver le minimum
         car = None
 
-        for other_car in self.simulator.cars:
+        cars = self.simulator.spatial_grid.get_cars_in_neighborhood(self)
+        for other_car in cars:
             if other_car is self or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
                 continue
             
@@ -144,7 +147,7 @@ class Car:
                 exit_road = self.current_target_extremity if self.status == "INTERSECTION" else self.last_extremity
                 exit_point, exit_dir = exit_road.get_start_car_pos_dir()
 
-                for other_car in self.simulator.cars:
+                for other_car in self.simulator.spatial_grid.get_cars_in_neighborhood(self):
                     if other_car is self:
                         continue
 

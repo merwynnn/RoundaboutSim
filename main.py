@@ -73,19 +73,19 @@ def create_grid_setup(n, m, car_flow_rate):
 n_rows = 2
 m_cols = 2
 
-flow_rates = []
-car_densities = []
+global_flow_rates = []
+entry_flow_rates = []
 
 # --- Matplotlib Setup for Live Plotting ---
 plt.ion()
 fig, ax = plt.subplots()
-line, = ax.plot(car_densities, flow_rates, 'bo-')
-ax.set_xlabel("Car Density (Number of Cars)")
-ax.set_ylabel("Flow Rate (Cars per second)")
-ax.set_title("Flow Rate vs. Car Density")
+line, = ax.plot(entry_flow_rates, global_flow_rates, 'bo-')
+ax.set_xlabel("Entry Flow Rate (Cars per tick)")
+ax.set_ylabel("Global Flow Rate (Ticks/car)")
+ax.set_title("Global Flow Rate vs. Entry Flow Rate")
 ax.grid(True)
-ax.set_xlim(0, 200) # Adjust as needed
-ax.set_ylim(0, 0.1) # Adjust as needed
+ax.set_xlim(0, 0.1) # Adjust as needed
+ax.set_ylim(0, 10000) # Adjust as needed
 
 simulator = Simulator(win=None, use_gui=use_gui)
 
@@ -112,27 +112,28 @@ def run_simulation_for_multiplier(multiplier):
             # of recent car counts is below a threshold.
             if np.std(last_car_counts) < 1.5:
                 print(f"System stable after {tick} ticks with car count std dev < 2.0.")
+                
                 break
     
-    final_car_density = simulator.get_car_density()
-    actual_flow_rate = simulator.get_flow_rate()
+    entry_flow_rate = simulator.get_entry_flow_rate()
+    global_flow_rate = simulator.get_global_flow_rate()
     
-    print(f"  -> Final Car Density: {final_car_density}, Actual Flow Rate: {actual_flow_rate:.4f}")
-    return final_car_density, actual_flow_rate
+    print(f"  -> Entry Flow Rate: {entry_flow_rate:.4f}, Global Flow Rate: {global_flow_rate:.2f}")
+    return entry_flow_rate, global_flow_rate
 
 # --- Main Experiment Loop ---
-spawn_multipliers = np.arange(1.3, 0.2, -0.05)
+spawn_multipliers = np.arange(1.3, 0.2, -0.2)
 
 for multiplier in spawn_multipliers:
-    density, flow = run_simulation_for_multiplier(multiplier)
+    entry_flow, global_flow = run_simulation_for_multiplier(multiplier)
     
-    if density > 0 or flow > 0:
-        car_densities.append(density)
-        flow_rates.append(flow)
+    if entry_flow > 0 or global_flow > 0:
+        entry_flow_rates.append(entry_flow)
+        global_flow_rates.append(global_flow)
         
         # Update plot
-        line.set_xdata(car_densities)
-        line.set_ydata(flow_rates)
+        line.set_xdata(entry_flow_rates)
+        line.set_ydata(global_flow_rates)
         ax.relim()
         ax.autoscale_view()
         fig.canvas.draw()

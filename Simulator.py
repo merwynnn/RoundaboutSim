@@ -9,6 +9,7 @@ from Car import Car
 from Camera import Camera # Added
 from Intersections import *
 from FlowManager import FlowManager
+from SpatialGrid import SpatialGrid
 import os
 
 class Simulator:
@@ -45,6 +46,8 @@ class Simulator:
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
 
+        self.spatial_grid = SpatialGrid(WIDTH * 10, HEIGHT * 10, 100)
+
         self.initialized = False
 
         self.flow_manager = None
@@ -56,10 +59,18 @@ class Simulator:
 
         self.total_cars_spawned_count = 0
 
+        self.total_ticks = 0
+        self.car_lifetimes = []
+
+    def get_global_flow_rate(self):
+        if not self.car_lifetimes:
+            return 0
+        return sum(self.car_lifetimes) / len(self.car_lifetimes)
+
     def get_car_density(self):
         return len(self.cars)
 
-    def get_flow_rate(self):
+    def get_entry_flow_rate(self):
         total_interval = 0
         spawner_count = 0
         for spawner in self.road_extremity_spawners:
@@ -73,6 +84,9 @@ class Simulator:
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None,config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
         
+        self.total_ticks = 0
+        self.car_lifetimes = []
+
         self.flow_manager = FlowManager(spawn_intervall_multiplier=spawn_intervall_multiplier, config_file=config_file)
         
         # --- Your existing setup code ---
@@ -152,6 +166,10 @@ class Simulator:
     def update(self, dt, events):
         if not self.initialized:
             return
+
+        self.total_ticks += 1
+
+        self.spatial_grid.update(self.cars)
 
         # Update simulation logic
         for road in self.roads:
@@ -305,6 +323,8 @@ class Simulator:
         # Check if the car object exists in the list before attempting removal
         if car in self.cars:
             self.cars.remove(car)
+            lifetime = self.total_ticks - car.creation_tick
+            self.car_lifetimes.append(lifetime)
         # Optional: Clean up the car object if necessary (Python's garbage collector usually handles this)
         # del car
         # print("Car reached destination and was removed.") # For debugging
@@ -330,7 +350,7 @@ class Simulator:
 
         if path: # Only spawn if a path exists
             car_img = random.choice(self.preloaded_car_images) if self.use_gui and self.preloaded_car_images else None
-            new_car = Car(path, car_img)
+            new_car = Car(path, self.total_ticks, car_img)
             # It seems the Car class already calls generate_path internally,
             # ensure it uses the passed end_extremity or remove the internal call.
             # Let's assume Car uses the provided final_target_extremity.
