@@ -35,17 +35,19 @@ class Simulator:
             images.append(img)
         return images
 
-    def __init__(self, win=None, config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
+    def __init__(self, win=None, use_gui=True):
         Simulator._instance = self
-        self.win = win
+        self.use_gui = use_gui
+        self.win = win if self.use_gui else None
+        
         from Constants import WIDTH, HEIGHT # Make sure WIDTH and HEIGHT are imported
         self.camera = Camera(WIDTH, HEIGHT) # Added
-        self.initialized = False
-
-        self.flow_manager = FlowManager(spawn_intervall_multiplier=spawn_intervall_multiplier, config_file=config_file)
-
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
+
+        self.initialized = False
+
+        self.flow_manager = None
 
         self.debug = False
         self.selected_car = None # Track the currently selected car
@@ -54,7 +56,25 @@ class Simulator:
 
         self.total_cars_spawned_count = 0
 
-    def initialize(self, intersections=None, roads=None, road_extremity_spawners=None):
+    def get_car_density(self):
+        return len(self.cars)
+
+    def get_flow_rate(self):
+        total_interval = 0
+        spawner_count = 0
+        for spawner in self.road_extremity_spawners:
+            if spawner.spawn_cars:
+                total_interval += spawner.spawn_cars_timer
+                spawner_count += 1
+        if spawner_count == 0:
+            return 0
+        avg_interval = total_interval / spawner_count
+        return 1 / avg_interval if avg_interval > 0 else 0
+
+    def initialize(self, intersections=None, roads=None, road_extremity_spawners=None,config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
+        
+        self.flow_manager = FlowManager(spawn_intervall_multiplier=spawn_intervall_multiplier, config_file=config_file)
+        
         # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
         self.roads = roads if roads is not None else []
@@ -132,7 +152,21 @@ class Simulator:
     def update(self, dt, events):
         if not self.initialized:
             return
-        # --- Your existing run loop ---
+
+        # Update simulation logic
+        for road in self.roads:
+            road.update(dt)
+        for intersection in self.intersections:
+            intersection.update(dt)
+        for car in list(self.cars):
+            car.move(dt)
+        for road_extremity in self.road_extremity_spawners:
+            road_extremity.update(dt)
+
+        if not self.use_gui:
+            return
+
+        # --- Handle GUI (events, rendering) ---
         for event in events:
             self.camera.handle_event(event) # Added
             if event.type == pygame.KEYDOWN:
@@ -162,21 +196,15 @@ class Simulator:
         self.win.fill(BACKGROUND_COLOR)
 
         for road in self.roads:
-            road.update(dt)
             road.draw(self.win)
 
 
         for intersection in self.intersections:
-            intersection.update(dt)
             intersection.draw(self.win)
 
         # Use a copy of the list for iteration if cars can be removed during the loop
-        for car in list(self.cars):
-            car.move(dt)
+        for car in self.cars:
             car.draw(self.win)
-
-        for road_extremity in self.road_extremity_spawners:
-            road_extremity.update(dt)
 
         if self.selected_car and self.debug:
             self.draw_debug_panel()
@@ -301,12 +329,14 @@ class Simulator:
         path = self.generate_path(start_extremity, end_extremity)
 
         if path: # Only spawn if a path exists
-            car_img = random.choice(self.preloaded_car_images)
+            car_img = random.choice(self.preloaded_car_images) if self.use_gui and self.preloaded_car_images else None
             new_car = Car(path, car_img)
             # It seems the Car class already calls generate_path internally,
             # ensure it uses the passed end_extremity or remove the internal call.
             # Let's assume Car uses the provided final_target_extremity.
             self.cars.append(new_car)
+
+            return new_car
             # print(f"Spawned car from {start_extremity.pos} to {end_extremity.pos}") # For debugging
         else:
             print(f"Warning: Could not generate path for new car from {start_extremity.pos} to {end_extremity.pos}. Car not spawned.")

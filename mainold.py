@@ -36,8 +36,8 @@ def create_grid_setup(n, m):
             pos_x = (j * spacing_between_centers) + spacing_between_centers
             pos_y = (i * spacing_between_centers) + spacing_between_centers
             pos = (int(pos_x), int(pos_y))
-            #intersections.append(ClassicRoundabout(pos, roundabout_radius, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
-            intersections.append(RedLightIntersection(pos, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
+            intersections.append(ClassicRoundabout(pos, roundabout_radius, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
+            #intersections.append(RedLightIntersection(pos, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
 
     # Create roads connecting intersections
     for i in range(n):
@@ -108,8 +108,14 @@ def create_grid_setup(n, m):
 
 
 time_multiplier = 1
+
+tick = 0
+
 while True:
-    dt = time_multiplier*2
+    tick+=1
+    if tick % 1000 == 0:
+        print(f"  ... tick {tick}")
+    dt = 15
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:

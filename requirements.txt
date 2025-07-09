@@ -2,3 +2,4 @@ pygame
 matplotlib
 pandas
 openpyxl
+numpy

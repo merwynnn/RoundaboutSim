@@ -35,7 +35,7 @@ class RoadExtremity:
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
                 if self.last_spawned_car:
-                    if (self.last_spawned_car.pos - self.pos).length() > 20:
+                    if (self.last_spawned_car.pos - self.pos).length() > 50:
                         self.last_spawned_car = Simulator.get_instance().spawn_car(self)
                 else:
                     self.last_spawned_car = Simulator.get_instance().spawn_car(self)

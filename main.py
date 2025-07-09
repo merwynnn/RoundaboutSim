@@ -1,24 +1,16 @@
-import pygame
 from Simulator import Simulator
 from Constants import *
 from Road import Road, RoadExtremity
-from Car import Car
 from Intersections import *
 import sys
-print("start")
-# Pygame setup
-pygame.init()
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.animation import FuncAnimation
 
-win = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Roundabout Simulator")
+# --- Simulation Setup ---
+use_gui = False  # Set to False for batch processing
 
-clock = pygame.time.Clock()
-
-simulator = Simulator(win)
-
-car_flow_rate = 120
-
-def create_grid_setup(n, m):
+def create_grid_setup(n, m, car_flow_rate):
     RoadExtremity.next_id = 0
     intersections = []
     roads = []
@@ -26,152 +18,127 @@ def create_grid_setup(n, m):
 
     fixed_road_length = 500
     roundabout_radius = 100
-    # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
-    # Create intersections
     for i in range(n):
         for j in range(m):
-            # Calculate position for the center of the roundabout
             pos_x = (j * spacing_between_centers) + spacing_between_centers
             pos_y = (i * spacing_between_centers) + spacing_between_centers
             pos = (int(pos_x), int(pos_y))
             intersections.append(ClassicRoundabout(pos, roundabout_radius, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
-            #intersections.append(RedLightIntersection(pos, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]))
 
-    # Create roads connecting intersections
     for i in range(n):
         for j in range(m):
             current_intersection_index = i * m + j
             current_intersection = intersections[current_intersection_index]
-
-            # Connect to intersection on the right
             if j < m - 1:
                 right_intersection_index = i * m + (j + 1)
                 right_intersection = intersections[right_intersection_index]
-                roads.append(Road(current_intersection.exits[1], right_intersection.exits[0])) # Connect right exit to left entry
-                roads.append(Road(right_intersection.exits[0], current_intersection.exits[1])) # Connect left exit to right entry
-
-            # Connect to intersection below
+                roads.append(Road(current_intersection.exits[1], right_intersection.exits[0]))
+                roads.append(Road(right_intersection.exits[0], current_intersection.exits[1]))
             if i < n - 1:
                 below_intersection_index = (i + 1) * m + j
                 below_intersection = intersections[below_intersection_index]
-                roads.append(Road(current_intersection.exits[3], below_intersection.exits[2])) # Connect down exit to up entry
-                roads.append(Road(below_intersection.exits[2], current_intersection.exits[3])) # Connect up exit to down entry
+                roads.append(Road(current_intersection.exits[3], below_intersection.exits[2]))
+                roads.append(Road(below_intersection.exits[2], current_intersection.exits[3]))
 
-    # Create road extremities at the edges of the grid
-    # Top edge
+    # Edge spawners
     for j in range(m):
         center_x_col_j = (j * spacing_between_centers) + spacing_between_centers
-        first_row_roundabout_up_exit_y = ((0 * spacing_between_centers) + spacing_between_centers) - roundabout_radius
-        spawner_y = first_row_roundabout_up_exit_y - fixed_road_length
-        ext_pos = (int(center_x_col_j), int(spawner_y))
-        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
-        road_extremity_spawners.append(ext)
-        roads.append(Road(ext, intersections[j].exits[2]))
+        ext_pos_top = (int(center_x_col_j), int(((0 * spacing_between_centers) + spacing_between_centers) - roundabout_radius - fixed_road_length))
+        ext_top = RoadExtremity(ext_pos_top, spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        road_extremity_spawners.append(ext_top)
+        roads.append(Road(ext_top, intersections[j].exits[2]))
 
-    # Bottom edge
-    for j in range(m):
-        center_x_col_j = (j * spacing_between_centers) + spacing_between_centers
-        last_row_idx = n - 1
-        last_row_roundabout_down_exit_y = ((last_row_idx * spacing_between_centers) + spacing_between_centers) + roundabout_radius
-        spawner_y = last_row_roundabout_down_exit_y + fixed_road_length
-        ext_pos = (int(center_x_col_j), int(spawner_y))
-        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
-        road_extremity_spawners.append(ext)
-        roads.append(Road(intersections[last_row_idx * m + j].exits[3], ext))
+        ext_pos_bottom = (int(center_x_col_j), int((((n - 1) * spacing_between_centers) + spacing_between_centers) + roundabout_radius + fixed_road_length))
+        ext_bottom = RoadExtremity(ext_pos_bottom, spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        road_extremity_spawners.append(ext_bottom)
+        roads.append(Road(intersections[(n - 1) * m + j].exits[3], ext_bottom))
 
-    # Left edge
     for i in range(n):
         center_y_row_i = (i * spacing_between_centers) + spacing_between_centers
-        first_col_idx = 0
-        first_col_roundabout_left_exit_x = ((first_col_idx * spacing_between_centers) + spacing_between_centers) - roundabout_radius
-        spawner_x = first_col_roundabout_left_exit_x - fixed_road_length
-        ext_pos = (int(spawner_x), int(center_y_row_i))
-        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
-        road_extremity_spawners.append(ext)
-        roads.append(Road(ext, intersections[i * m + first_col_idx].exits[0]))
+        ext_pos_left = (int((((0 * spacing_between_centers) + spacing_between_centers) - roundabout_radius) - fixed_road_length), int(center_y_row_i))
+        ext_left = RoadExtremity(ext_pos_left, spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        road_extremity_spawners.append(ext_left)
+        roads.append(Road(ext_left, intersections[i * m].exits[0]))
 
-    # Right edge
-    for i in range(n):
-        center_y_row_i = (i * spacing_between_centers) + spacing_between_centers
-        last_col_idx = m - 1
-        last_col_roundabout_right_exit_x = ((last_col_idx * spacing_between_centers) + spacing_between_centers) + roundabout_radius
-        spawner_x = last_col_roundabout_right_exit_x + fixed_road_length
-        ext_pos = (int(spawner_x), int(center_y_row_i))
-        ext = RoadExtremity(ext_pos, spawn_cars=True, spawn_cars_timer=car_flow_rate)
-        road_extremity_spawners.append(ext)
-        roads.append(Road(intersections[i * m + last_col_idx].exits[1], ext))
-
+        ext_pos_right = (int((((m - 1) * spacing_between_centers) + spacing_between_centers) + roundabout_radius + fixed_road_length), int(center_y_row_i))
+        ext_right = RoadExtremity(ext_pos_right, spawn_cars=True, spawn_cars_timer=car_flow_rate)
+        road_extremity_spawners.append(ext_right)
+        roads.append(Road(intersections[i * m + (m - 1)].exits[1], ext_right))
 
     return intersections, roads, road_extremity_spawners
 
+# --- Experiment Parameters ---
+n_rows = 2
+m_cols = 2
 
-time_multiplier = 1
-while True:
-    dt = time_multiplier*2
-    events = pygame.event.get()
-    for event in events:
-        if event.type == pygame.QUIT:
-            pygame.quit()
-            sys.exit()
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_RIGHT:
-                if time_multiplier == 1:
-                    time_multiplier = 2
-                elif time_multiplier == 2:
-                    time_multiplier = 4
-                else:
-                    time_multiplier = 1
-            elif event.key == pygame.K_d:
-                DEBUG = not DEBUG
-                simulator.debug = DEBUG
-            elif event.key == pygame.K_1:
-                intersections_0 = [ClassicRoundabout((400, 400), 100, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]),]
+flow_rates = []
+car_densities = []
 
-                ext1 = RoadExtremity((0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext2 = RoadExtremity((WIDTH*2, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_4 = RoadExtremity((WIDTH//2, HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
+# --- Matplotlib Setup for Live Plotting ---
+plt.ion()
+fig, ax = plt.subplots()
+line, = ax.plot(car_densities, flow_rates, 'bo-')
+ax.set_xlabel("Car Density (Number of Cars)")
+ax.set_ylabel("Flow Rate (Cars per second)")
+ax.set_title("Flow Rate vs. Car Density")
+ax.grid(True)
+ax.set_xlim(0, 200) # Adjust as needed
+ax.set_ylim(0, 0.1) # Adjust as needed
 
-                roads_0 = [Road(ext1, intersections_0[0].exits[0]), Road(ext2, intersections_0[0].exits[1]), Road(ext_3, intersections_0[0].exits[2]), Road(ext_4, intersections_0[0].exits[3])]
+simulator = Simulator(win=None, use_gui=use_gui)
 
-                road_extremity_spawners_0 = [ext1, ext2, ext_3, ext_4]
-                simulator.initialize(intersections_0, roads_0, road_extremity_spawners_0)
-            elif event.key == pygame.K_2:
-                # Red Light Intersection setup
-                intersection_pos = (WIDTH // 2, HEIGHT // 2)
-                exits_dir = [Vec2(0, -1), Vec2(1, 0), Vec2(0, 1), Vec2(-1, 0)] # N, E, S, W
-                red_light_intersection = RedLightIntersection(intersection_pos, exits_dir)
+def run_simulation_for_multiplier(multiplier):
+    print(f"Testing with multiplier: {multiplier:.2f}")
+    
+    intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols, car_flow_rate=120)
+    simulator.initialize(intersections, roads, road_extremity_spawners, config_file='flow_config.xlsx', spawn_intervall_multiplier=multiplier)
 
-                # Road extremities
-                ext_n = RoadExtremity((WIDTH // 2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_e = RoadExtremity((WIDTH, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_s = RoadExtremity((WIDTH // 2, HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_w = RoadExtremity((0, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                
-                # Roads connecting extremities to the intersection
-                roads_2 = [
-                    Road(ext_n, red_light_intersection.exits[0]),
-                    Road(ext_e, red_light_intersection.exits[1]),
-                    Road(ext_s, red_light_intersection.exits[2]),
-                    Road(ext_w, red_light_intersection.exits[3]),
-                    Road(red_light_intersection.exits[0], ext_n),
-                    Road(red_light_intersection.exits[1], ext_e),
-                    Road(red_light_intersection.exits[2], ext_s),
-                    Road(red_light_intersection.exits[3], ext_w)
-                ]
+    max_ticks = 20000
+    stability_ticks = 1000
+    last_car_counts = []
+    
+    for tick in range(max_ticks):
+        if tick % 1000 == 0:
+            print(f"  ... tick {tick}/{max_ticks}")
+        simulator.update(dt=15, events=[])
+        
+        current_car_count = simulator.get_car_density()
+        last_car_counts.append(current_car_count)
+        if len(last_car_counts) > stability_ticks:
+            last_car_counts.pop(0)
+            # Check if the car count has stabilized by checking if the standard deviation
+            # of recent car counts is below a threshold.
+            if np.std(last_car_counts) < 1.5:
+                print(f"System stable after {tick} ticks with car count std dev < 2.0.")
+                break
+    
+    final_car_density = simulator.get_car_density()
+    actual_flow_rate = simulator.get_flow_rate()
+    
+    print(f"  -> Final Car Density: {final_car_density}, Actual Flow Rate: {actual_flow_rate:.4f}")
+    return final_car_density, actual_flow_rate
 
-                road_extremity_spawners_2 = [ext_n, ext_e, ext_s, ext_w]
-                simulator.initialize([red_light_intersection], roads_2, road_extremity_spawners_2)
-            elif event.key == pygame.K_3:
-                n_rows = 2
-                m_cols = 2
-                intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)
-                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3)
+# --- Main Experiment Loop ---
+spawn_multipliers = np.arange(1.3, 0.2, -0.05)
 
+for multiplier in spawn_multipliers:
+    density, flow = run_simulation_for_multiplier(multiplier)
+    
+    if density > 0 or flow > 0:
+        car_densities.append(density)
+        flow_rates.append(flow)
+        
+        # Update plot
+        line.set_xdata(car_densities)
+        line.set_ydata(flow_rates)
+        ax.relim()
+        ax.autoscale_view()
+        fig.canvas.draw()
+        fig.canvas.flush_events()
 
-    if simulator:
-        simulator.update(dt, events)
-
-    pygame.display.update()
+print("Experiment finished.")
+plt.ioff()
+plt.savefig("flow_vs_density_plot.png")
+plt.show()
