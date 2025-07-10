@@ -2,6 +2,72 @@ import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
 import math
+import numpy as np
+from numba import jit
+
+# Numba-jitted helper function for angle calculation
+@jit(nopython=True, cache=True)
+def numba_angle_to(dir_x, dir_y, vec_x, vec_y):
+    # Calculate the dot product
+    dot_product = dir_x * vec_x + dir_y * vec_y
+    # Calculate the determinant (cross product in 2D)
+    determinant = dir_x * vec_y - dir_y * vec_x
+    # Calculate the angle in radians
+    angle_rad = math.atan2(determinant, dot_product)
+    # Convert to degrees
+    angle_deg = math.degrees(angle_rad)
+    return angle_deg
+
+@jit(nopython=True, cache=True)
+def _numba_check_front_calculations(
+    car_pos_x, car_pos_y, car_dir_x, car_dir_y,
+    car_status_val, # 0 for APPROACHING, 1 for INTERSECTION, 2 for EXITING
+    car_current_target_extremity_intersection_id, # id of intersection, or -1 if None
+    car_detection_range, car_detection_angle_threshold, car_height,
+    other_cars_data # NumPy array: [pos_x, pos_y, status_val, current_target_extremity_intersection_id, id]
+    ):
+    closest_car_distance = np.inf
+    closest_car_id = -1
+
+    start_pos_x = car_pos_x + car_dir_x * car_height / 2
+    start_pos_y = car_pos_y + car_dir_y * car_height / 2
+
+    for i in range(other_cars_data.shape[0]):
+        other_car_pos_x = other_cars_data[i, 0]
+        other_car_pos_y = other_cars_data[i, 1]
+        other_car_status_val = int(other_cars_data[i, 2])
+        other_car_current_target_extremity_intersection_id = int(other_cars_data[i, 3])
+        other_car_id = int(other_cars_data[i, 4]) # Store original index or unique ID
+
+        # Filter based on status and intersection (ported from original logic)
+        # if other_car is self (handled by not including self in other_cars_data)
+        # or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)
+        # or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
+        if (car_status_val == 0 and other_car_status_val == 0 and \
+            other_car_current_target_extremity_intersection_id != car_current_target_extremity_intersection_id and \
+            car_current_target_extremity_intersection_id != -1 and other_car_current_target_extremity_intersection_id != -1) or \
+           ((car_status_val == 1 or car_status_val == 2) and other_car_status_val == 0 and \
+            other_car_current_target_extremity_intersection_id == car_current_target_extremity_intersection_id and \
+            car_current_target_extremity_intersection_id != -1):
+            continue
+
+        vec_to_other_x = other_car_pos_x - start_pos_x
+        vec_to_other_y = other_car_pos_y - start_pos_y
+
+        distance_sq = vec_to_other_x**2 + vec_to_other_y**2
+        if 0 < distance_sq < car_detection_range**2: # Compare squared distances
+            distance = math.sqrt(distance_sq)
+            if distance_sq > 1e-12: # Check for non-zero length before normalization/angle
+                # Numba compatible angle calculation
+                angle = numba_angle_to(car_dir_x, car_dir_y, vec_to_other_x, vec_to_other_y)
+                # angle = (angle + 180) % 360 - 180 # Already handled by atan2 logic in numba_angle_to for -180 to 180 range
+
+                if abs(angle) < car_detection_angle_threshold:
+                    if distance < closest_car_distance:
+                        closest_car_distance = distance
+                        closest_car_id = other_car_id
+    return closest_car_distance, closest_car_id
+
 
 class Car:
     
@@ -75,37 +141,76 @@ class Car:
 
         
 
+    _status_to_int = {"APPROACHING": 0, "INTERSECTION": 1, "EXITING": 2}
+    _int_to_status = {v: k for k, v in _status_to_int.items()}
+
 
     def check_front(self):
-        
-        closest_car_distance = math.inf # Initialise avec l'infini pour trouver le minimum
-        car = None
+        # Get neighboring cars
+        neighboring_cars_objects = self.simulator.spatial_grid.get_cars_in_neighborhood(self)
 
-        cars = self.simulator.spatial_grid.get_cars_in_neighborhood(self)
-        for other_car in cars:
-            if other_car is self or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
+        # Prepare data for Numba function
+        # Filter out self and prepare data for other cars
+        other_cars_list_for_numba = []
+        # Keep a mapping from the simple ID used in Numba back to car objects
+        # Using list index as a simple ID for this call
+        id_to_car_map = {}
+
+        for i, other_car_obj in enumerate(neighboring_cars_objects):
+            if other_car_obj is self:
                 continue
             
-            start_pos = self.pos+self.dir*self.car_height/2
-            vector_to_other = other_car.pos - start_pos
-            distance = vector_to_other.length()
-            if 0 < distance < self.detection_range:
+            other_car_status_val = self._status_to_int.get(other_car_obj.status, -1) # Default to -1 if status unknown
 
-                if vector_to_other.length_squared() > 1e-6: 
-                    try:
-                        angle = self.dir.angle_to(vector_to_other)
-                        angle = (angle + 180) % 360 - 180
-                        if abs(angle) < self.detection_angle_threshold:
- 
-                            # La voiture est devant et dans la portée
-                            if distance < closest_car_distance:
-                                closest_car_distance = distance
-                                car = other_car
-                    except ValueError:
-                         print(f"Warning: ValueError pendant le calcul d'angle pour la voiture à {self.pos}")
-                         continue # Passer à la voiture suivante
+            # Handle intersection ID for other_car
+            other_car_intersection_id = -1
+            if other_car_obj.current_target_extremity and other_car_obj.current_target_extremity.intersection:
+                # Assuming intersection objects have a unique 'id' attribute or we can use hash() or some other unique int id
+                # For now, let's assume intersection objects themselves are hashable or have an id.
+                # This part might need adjustment based on how Intersection objects are identified.
+                # Using object's Python id() if no specific id attribute exists.
+                other_car_intersection_id = id(other_car_obj.current_target_extremity.intersection)
 
-        return closest_car_distance, car
+
+            other_cars_list_for_numba.append([
+                other_car_obj.pos.x, other_car_obj.pos.y,
+                other_car_status_val,
+                other_car_intersection_id,
+                i # Using list index as a temporary ID for this call
+            ])
+            id_to_car_map[i] = other_car_obj
+
+        if not other_cars_list_for_numba:
+            return math.inf, None
+
+        other_cars_data_np = np.array(other_cars_list_for_numba, dtype=np.float64)
+
+        # Current car data
+        car_pos_x = self.pos.x
+        car_pos_y = self.pos.y
+        car_dir_x = self.dir.x
+        car_dir_y = self.dir.y
+
+        car_status_val = self._status_to_int.get(self.status, -1)
+
+        car_current_target_extremity_intersection_id = -1
+        if self.current_target_extremity and self.current_target_extremity.intersection:
+            # Using object's Python id()
+            car_current_target_extremity_intersection_id = id(self.current_target_extremity.intersection)
+
+
+        closest_distance, closest_car_id_from_numba = _numba_check_front_calculations(
+            car_pos_x, car_pos_y, car_dir_x, car_dir_y,
+            car_status_val,
+            car_current_target_extremity_intersection_id,
+            self.detection_range, self.detection_angle_threshold, self.car_height,
+            other_cars_data_np
+        )
+
+        if closest_car_id_from_numba != -1 and closest_car_id_from_numba in id_to_car_map:
+            return closest_distance, id_to_car_map[closest_car_id_from_numba]
+        else:
+            return math.inf, None
 
     def move(self, dt):
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 1
