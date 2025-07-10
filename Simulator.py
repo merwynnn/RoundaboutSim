@@ -58,6 +58,7 @@ class Simulator:
         self.render_as_rect = False
 
         self.total_cars_spawned_count = 0
+        self.total_cars_exited = 0
 
         self.total_ticks = 0
         self.car_lifetimes = []
@@ -81,6 +82,10 @@ class Simulator:
             return 0
         avg_interval = total_interval / spawner_count
         return 1 / avg_interval if avg_interval > 0 else 0
+    
+    def get_exit_flow_rate(self):
+        return self.total_cars_exited / self.total_ticks if self.total_ticks > 0 else 0
+
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None,config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
         
@@ -322,6 +327,7 @@ class Simulator:
     def car_reached_destination(self, car):
         # Check if the car object exists in the list before attempting removal
         if car in self.cars:
+            self.total_cars_exited += 1
             self.cars.remove(car)
             lifetime = self.total_ticks - car.creation_tick
             self.car_lifetimes.append(lifetime)

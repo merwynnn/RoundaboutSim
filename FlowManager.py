@@ -21,7 +21,7 @@ class FlowManager:
     def set_active_spawners(self, active_spawner_ids):
         if self.flow_matrix is not None:
             # Format IDs to match the Excel file format 'spawner_X'
-            formatted_spawner_ids = [f"spawner_{_id}" for _id in active_spawner_ids]
+            formatted_spawner_ids = [f"sp{_id}" for _id in active_spawner_ids]
             
             # Filter columns (starters)
             self.flow_matrix = self.flow_matrix[
@@ -34,13 +34,13 @@ class FlowManager:
 
         if self.flow_rates is not None:
             # Filter flow rates
-            formatted_spawner_ids = [f"spawner_{_id}" for _id in active_spawner_ids]
+            formatted_spawner_ids = [f"sp{_id}" for _id in active_spawner_ids]
             self.flow_rates = self.flow_rates[
                 self.flow_rates.index.isin(formatted_spawner_ids)
             ]
 
     def get_destination(self, start_extremity_id_int):
-        start_extremity_id = f"spawner_{start_extremity_id_int}"
+        start_extremity_id = f"sp{start_extremity_id_int}"
         if self.flow_matrix is None:
             return None
         
@@ -58,15 +58,15 @@ class FlowManager:
         probabilities = probabilities / probabilities.sum()
         
         destination_id = probabilities.sample(n=1, weights=probabilities, random_state=self.random_state).index[0]
-        return int(destination_id.replace('spawner_', ''))
+        return int(destination_id.replace('sp', ''))
 
     def get_spawn_interval(self, extremity_id_int):
-        extremity_id = f"spawner_{extremity_id_int}"
+        extremity_id = f"sp{extremity_id_int}"
         if self.flow_rates is None:
             return None
         
         try:
-            return self.flow_rates.loc[extremity_id, 'spawn_interval']*self.spawn_intervall_multiplier
+            return self.flow_rates.loc[extremity_id, 'rate']*self.spawn_intervall_multiplier
         except KeyError:
             print(f"Warning: Extremity ID '{extremity_id}' not found in flow rates.")
             return None

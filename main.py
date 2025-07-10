@@ -6,6 +6,7 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
+import os # Import os module
 
 # --- Simulation Setup ---
 use_gui = False  # Set to False for batch processing
@@ -73,73 +74,86 @@ def create_grid_setup(n, m, car_flow_rate):
 n_rows = 2
 m_cols = 2
 
-global_flow_rates = []
-entry_flow_rates = []
-
-# --- Matplotlib Setup for Live Plotting ---
+# --- Matplotlib Setup ---
 plt.ion()
 fig, ax = plt.subplots()
-line, = ax.plot(entry_flow_rates, global_flow_rates, 'bo-')
-ax.set_xlabel("Entry Flow Rate (Cars per tick)")
-ax.set_ylabel("Global Flow Rate (Ticks/car)")
-ax.set_title("Global Flow Rate vs. Entry Flow Rate")
+ax.set_ylabel("Flow Rate (Cars Exiting per tick)")
+ax.set_xlabel("Mean Density (cars)")
+ax.set_title("Global Flow Rate vs. Mean Density for Different Configurations")
 ax.grid(True)
-ax.set_xlim(0, 0.1) # Adjust as needed
-ax.set_ylim(0, 10000) # Adjust as needed
+ax.set_xlim(0, 200) # Adjust as needed
+ax.set_ylim(0, 0.2) # Adjust as needed
 
 simulator = Simulator(win=None, use_gui=use_gui)
 
-def run_simulation_for_multiplier(multiplier):
-    print(f"Testing with multiplier: {multiplier:.2f}")
+def run_simulation_for_multiplier(multiplier, config_file_path):
+    print(f"Testing with multiplier: {multiplier:.2f} and config: {config_file_path}")
     
     intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols, car_flow_rate=120)
-    simulator.initialize(intersections, roads, road_extremity_spawners, config_file='flow_config.xlsx', spawn_intervall_multiplier=multiplier)
+    simulator.initialize(intersections, roads, road_extremity_spawners, config_file=config_file_path, spawn_intervall_multiplier=multiplier)
 
     max_ticks = 20000
     stability_ticks = 1000
+    car_counts = []
     last_car_counts = []
+
+    traffic_jam = False
     
     for tick in range(max_ticks):
         if tick % 1000 == 0:
             print(f"  ... tick {tick}/{max_ticks}")
         simulator.update(dt=15, events=[])
         
-        current_car_count = simulator.get_car_density()
-        last_car_counts.append(current_car_count)
-        if len(last_car_counts) > stability_ticks:
-            last_car_counts.pop(0)
-            # Check if the car count has stabilized by checking if the standard deviation
-            # of recent car counts is below a threshold.
-            if np.std(last_car_counts) < 1.5:
-                print(f"System stable after {tick} ticks with car count std dev < 2.0.")
-                
-                break
+        if tick % 500 == 0:
+            print(f"  ... tick {tick}/{max_ticks}")
+            current_car_count = simulator.get_car_density()
+            car_counts.append(current_car_count)
+            last_car_counts.append(current_car_count)
+            if len(last_car_counts) > stability_ticks:
+                last_car_counts.pop(0)
+                # Check if the car count has stabilized by checking if the standard deviation
+                # of recent car counts is below a threshold.
+                if np.std(last_car_counts) < 1.5:
+                    print(f"System stable after {tick} ticks with car count std dev = {np.std(last_car_counts):.2f}")
+                    traffic_jam = True
+                    break
     
-    entry_flow_rate = simulator.get_entry_flow_rate()
-    global_flow_rate = simulator.get_global_flow_rate()
+    if traffic_jam:
+        print(f"Traffic jam detected.")
+        return simulator.get_car_density(), 0
+
+    else:
+        print(f"No traffic jam detected.")
+    exit_flow_rate = simulator.get_exit_flow_rate()
+    mean_density = np.mean(car_counts)
     
-    print(f"  -> Entry Flow Rate: {entry_flow_rate:.4f}, Global Flow Rate: {global_flow_rate:.2f}")
-    return entry_flow_rate, global_flow_rate
+    print(f"  -> Flow Rate: {exit_flow_rate:.4f}, Mean Density: {mean_density:.4f}")
+    return mean_density, exit_flow_rate
 
 # --- Main Experiment Loop ---
-spawn_multipliers = np.arange(1.3, 0.2, -0.2)
+spawn_multipliers = np.arange(1.5, 0, -0.15)
 
-for multiplier in spawn_multipliers:
-    entry_flow, global_flow = run_simulation_for_multiplier(multiplier)
+config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
+colors = plt.cm.jet(np.linspace(0, 1, len(config_files))) # Generate distinct colors
+
+for i, config_file in enumerate(config_files):
+    config_file_path = os.path.join('configs', config_file)
+    exit_flow_rates = []
+    mean_densities = []
     
-    if entry_flow > 0 or global_flow > 0:
-        entry_flow_rates.append(entry_flow)
-        global_flow_rates.append(global_flow)
+    for multiplier in spawn_multipliers:
+        exit_flow, mean_density = run_simulation_for_multiplier(multiplier, config_file_path)
         
-        # Update plot
-        line.set_xdata(entry_flow_rates)
-        line.set_ydata(global_flow_rates)
-        ax.relim()
-        ax.autoscale_view()
-        fig.canvas.draw()
-        fig.canvas.flush_events()
+        if exit_flow > 0 or mean_density > 0:
+            exit_flow_rates.append(exit_flow)
+            mean_densities.append(mean_density)
+
+            ax.plot(exit_flow_rates, mean_densities, marker='o', linestyle='-', color=colors[i], label=f'Config: {config_file}')
+            fig.canvas.draw()
+            fig.canvas.flush_events()
 
 print("Experiment finished.")
 plt.ioff()
-plt.savefig("flow_vs_density_plot.png")
+plt.legend() # Add legend to distinguish lines
+plt.savefig("flow_vs_density_plot_all_configs.png") # Save with a new name
 plt.show()
