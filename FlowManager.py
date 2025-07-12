@@ -6,7 +6,7 @@ class FlowManager:
     def __init__(self, config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
         self.flow_matrix = None
         self.flow_rates = None
-        self.random_state = np.random.RandomState(self.SEED) if self.SEED is not None else None
+        self.random_state = np.random.default_rng(self.SEED)
 
         self.spawn_intervall_multiplier = spawn_intervall_multiplier
 
@@ -43,22 +43,24 @@ class FlowManager:
         start_extremity_id = f"sp{start_extremity_id_int}"
         if self.flow_matrix is None:
             return None
-        
+
         if start_extremity_id not in self.flow_matrix.columns:
             print(f"Warning: Start extremity '{start_extremity_id}' not found in flow matrix.")
             return None
 
-        probabilities = self.flow_matrix[start_extremity_id]
-        # Drop NA values to avoid issues with the choice function
-        probabilities = probabilities.dropna()
+        probabilities = self.flow_matrix[start_extremity_id].dropna()
+
         if probabilities.sum() == 0:
             return None
-        
-        # Normalize probabilities to ensure they sum to 1
+
         probabilities = probabilities / probabilities.sum()
-        
-        destination_id = probabilities.sample(n=1, weights=probabilities, random_state=self.random_state).index[0]
+        choices = probabilities.index.to_numpy()
+        weights = probabilities.to_numpy()
+
+        destination_id = self.random_state.choice(choices, p=weights)
+        #print(int(destination_id.replace('sp', '')))
         return int(destination_id.replace('sp', ''))
+
 
     def get_spawn_interval(self, extremity_id_int):
         extremity_id = f"sp{extremity_id_int}"

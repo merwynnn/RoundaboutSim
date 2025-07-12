@@ -5,6 +5,7 @@ from Road import Road, RoadExtremity
 from Car import Car
 from Intersections import *
 import sys
+import matplotlib.pyplot as plt
 print("start")
 # Pygame setup
 pygame.init()
@@ -119,6 +120,24 @@ while True:
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:
+            # Plotting
+            plt.figure(figsize=(10, 5))
+
+            plt.subplot(1, 2, 1)
+            plt.plot(simulator.exit_flow_rate_history)
+            plt.title("Real Entry Flow Rate vs. Time")
+            plt.xlabel("Time (ticks)")
+            plt.ylabel("Flow Rate")
+
+            plt.subplot(1, 2, 2)
+            plt.plot(simulator.car_density_history)
+            plt.title("Car Density vs. Time")
+            plt.xlabel("Time (ticks)")
+            plt.ylabel("Car Density")
+
+            plt.tight_layout()
+            plt.show()
+
             pygame.quit()
             sys.exit()
         if event.type == pygame.KEYDOWN:
@@ -174,8 +193,8 @@ while True:
                 n_rows = 2
                 m_cols = 2
                 intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)
-                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='flow_config.xlsx', spawn_intervall_multiplier=0.05)
-
+                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.5)
+                tick = 0
 
     if simulator:
         simulator.update(dt, events)

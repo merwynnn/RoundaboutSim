@@ -1,3 +1,4 @@
+import multiprocessing
 from Simulator import Simulator
 from Constants import *
 from Road import Road, RoadExtremity
@@ -70,49 +71,36 @@ def create_grid_setup(n, m, car_flow_rate):
 
     return intersections, roads, road_extremity_spawners
 
-# --- Experiment Parameters ---
-n_rows = 2
-m_cols = 2
-
-# --- Matplotlib Setup ---
-plt.ion()
-fig, ax = plt.subplots()
-ax.set_ylabel("Flow Rate (Cars Exiting per tick)")
-ax.set_xlabel("Mean Density (cars)")
-ax.set_title("Global Flow Rate vs. Mean Density for Different Configurations")
-ax.grid(True)
-ax.set_xlim(0, 200) # Adjust as needed
-ax.set_ylim(0, 0.2) # Adjust as needed
-
-simulator = Simulator(win=None, use_gui=use_gui)
-
-def run_simulation_for_multiplier(multiplier, config_file_path):
+def run_simulation_for_multiplier(args):
+    multiplier, config_file_path, n_rows, m_cols, use_gui = args
     print(f"Testing with multiplier: {multiplier:.2f} and config: {config_file_path}")
     
+    simulator = Simulator(win=None, use_gui=use_gui)
     intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols, car_flow_rate=120)
     simulator.initialize(intersections, roads, road_extremity_spawners, config_file=config_file_path, spawn_intervall_multiplier=multiplier)
 
-    max_ticks = 20000
+    max_ticks = 5000
     stability_ticks = 1000
     car_counts = []
     last_car_counts = []
 
+    flow_rates = []
+
     traffic_jam = False
     
     for tick in range(max_ticks):
-        if tick % 1000 == 0:
+        if tick % 3000 == 0:
             print(f"  ... tick {tick}/{max_ticks}")
         simulator.update(dt=15, events=[])
         
-        if tick % 500 == 0:
-            print(f"  ... tick {tick}/{max_ticks}")
+        if tick % 100 == 0:
             current_car_count = simulator.get_car_density()
             car_counts.append(current_car_count)
+            flow_rate = simulator.get_real_entry_flow_rate()
+            flow_rates.append(flow_rate)
             last_car_counts.append(current_car_count)
             if len(last_car_counts) > stability_ticks:
                 last_car_counts.pop(0)
-                # Check if the car count has stabilized by checking if the standard deviation
-                # of recent car counts is below a threshold.
                 if np.std(last_car_counts) < 1.5:
                     print(f"System stable after {tick} ticks with car count std dev = {np.std(last_car_counts):.2f}")
                     traffic_jam = True
@@ -124,36 +112,77 @@ def run_simulation_for_multiplier(multiplier, config_file_path):
 
     else:
         print(f"No traffic jam detected.")
-    exit_flow_rate = simulator.get_exit_flow_rate()
-    mean_density = np.mean(car_counts)
+    mean_flow_rate = (np.mean(flow_rates) if flow_rates else 0)*60*60
+    mean_exit_flow_rate = (sum(simulator.exit_flow_rate_history)/len(simulator.exit_flow_rate_history))*60*60
+    mean_density = np.mean(car_counts) if car_counts else 0
+
+    flow_rate = simulator.get_real_entry_flow_rate()*60*60
     
-    print(f"  -> Flow Rate: {exit_flow_rate:.4f}, Mean Density: {mean_density:.4f}")
-    return mean_density, exit_flow_rate
+    print(f"  -> Mean Entry Flow Rate: {flow_rate:.4f}, Mean Exit Flow Rate: {mean_exit_flow_rate:.4f}, Flow Rate: {flow_rate:.4f}, Mean Density: {mean_density:.4f}")
+    return mean_density, mean_exit_flow_rate
 
-# --- Main Experiment Loop ---
-spawn_multipliers = np.arange(1.5, 0, -0.15)
+def main():
+    # --- Experiment Parameters ---
+    n_rows = 2
+    m_cols = 2
 
-config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
-colors = plt.cm.jet(np.linspace(0, 1, len(config_files))) # Generate distinct colors
+    # --- Matplotlib Setup ---
+    fig, ax = plt.subplots()
+    ax.set_ylabel("Flow Rate (Cars Exiting per tick)")
+    ax.set_xlabel("Mean Density (cars)")
+    ax.set_title("Global Flow Rate vs. Mean Density for Different Configurations")
+    ax.grid(True)
+    ax.set_xlim(0, 200) # Adjust as needed
+    ax.set_ylim(0, 400) # Adjust as needed
 
-for i, config_file in enumerate(config_files):
-    config_file_path = os.path.join('configs', config_file)
-    exit_flow_rates = []
-    mean_densities = []
-    
-    for multiplier in spawn_multipliers:
-        exit_flow, mean_density = run_simulation_for_multiplier(multiplier, config_file_path)
-        
-        if exit_flow > 0 or mean_density > 0:
-            exit_flow_rates.append(exit_flow)
-            mean_densities.append(mean_density)
+    # --- Main Experiment Loop ---
+    spawn_multipliers = list(np.arange(5, 2, -1)) + list(np.arange(2, 1, -0.5)) + list(np.arange(1, 0.3, -0.1)) + list(np.arange(0.3, 0.1, -0.05)) + list(np.arange(0.1, 0.01, -0.01))
+    #spawn_multipliers = [1, 2, 3]
 
-            ax.plot(exit_flow_rates, mean_densities, marker='o', linestyle='-', color=colors[i], label=f'Config: {config_file}')
-            fig.canvas.draw()
-            fig.canvas.flush_events()
+    # config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
+    config_files = ['flow_config_1.xlsx'] # Use a single config for testing
+    colors = plt.cm.jet(np.linspace(0, 1, len(config_files))) # Generate distinct colors
 
-print("Experiment finished.")
-plt.ioff()
-plt.legend() # Add legend to distinguish lines
-plt.savefig("flow_vs_density_plot_all_configs.png") # Save with a new name
-plt.show()
+    try:
+        for i, config_file in enumerate(config_files):
+            config_file_path = os.path.join('configs', config_file)
+            config_file_path = "flow_config.xlsx"
+            print(f"Processing config file: {config_file_path}")
+
+            pool_args = [(multiplier, config_file_path, n_rows, m_cols, use_gui) for multiplier in spawn_multipliers]
+
+            # Use all available CPU cores
+            with multiprocessing.Pool(processes=multiprocessing.cpu_count()) as pool:
+                results = pool.map(run_simulation_for_multiplier, pool_args)
+
+            # Filter out cases where simulation might have failed or resulted in no cars
+            valid_results_with_multipliers = []
+            for res_idx, res in enumerate(results):
+                if res and (res[0] > 0 or res[1] > 0):
+                    valid_results_with_multipliers.append((spawn_multipliers[res_idx], res))
+
+            if not valid_results_with_multipliers:
+                continue
+
+            # Unpack for plotting
+            valid_multipliers = [item[0] for item in valid_results_with_multipliers]
+            mean_densities = [item[1][0] for item in valid_results_with_multipliers]
+            exit_flow_rates = [item[1][1] for item in valid_results_with_multipliers]
+
+            # Plotting
+            ax.plot(mean_densities, exit_flow_rates, marker='o', linestyle='-', color=colors[i], label=f'Config: {config_file}')
+            for j, multiplier in enumerate(valid_multipliers):
+                ax.annotate(f'{multiplier:.2f}', (mean_densities[j], exit_flow_rates[j]), xytext=(5, 5), textcoords='offset points')
+
+        print("Experiment finished.")
+        plt.legend()
+        plt.savefig("flow_vs_density_plot_with_multipliers.png")
+        plt.show()
+    except KeyboardInterrupt:
+        print("\nCaught KeyboardInterrupt, terminating processes.")
+        sys.exit(0)
+
+if __name__ == '__main__':
+    # This is important for multiprocessing to work correctly on all platforms
+    multiprocessing.freeze_support()
+    main()
