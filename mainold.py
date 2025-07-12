@@ -193,7 +193,7 @@ while True:
                 n_rows = 2
                 m_cols = 2
                 intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)
-                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.5)
+                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.05)
                 tick = 0
 
     if simulator:

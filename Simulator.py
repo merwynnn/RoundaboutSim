@@ -60,9 +60,8 @@ class Simulator:
         self.total_cars_spawned_count = 0
         self.total_cars_exited = 0
 
-        self.nb_cars_exit_delta = 20
-        self.delay_between_cars_exits_during_delta = []
-        
+        self.flow_rate_time_delta = 240
+        self.cars_exited_tick_during_delta = []
         self.last_exit_flow_rate = 0
         self.last_exited_car_tick = 0
 
@@ -205,6 +204,17 @@ class Simulator:
         if self.total_ticks > 0:
             self.real_entry_flow_rate_history.append(self.get_exit_flow_rate())
 
+        if self.total_ticks % 20 == 0:  # Every 20 ticks
+            for i in range(len(self.cars_exited_tick_during_delta)):
+                if self.cars_exited_tick_during_delta[0] < self.total_ticks - self.flow_rate_time_delta:
+                    self.cars_exited_tick_during_delta.pop(0)
+                else:
+                    break
+            
+            self.last_exit_flow_rate = len(self.cars_exited_tick_during_delta) / self.flow_rate_time_delta
+            self.exit_flow_rate_history.append(self.last_exit_flow_rate)
+        
+
         self.spatial_grid.update(self.cars)
 
         # Update simulation logic
@@ -301,7 +311,7 @@ class Simulator:
     def draw_global_debug_panel(self):
         mean_exit_flow_rate = (sum(self.exit_flow_rate_history)/len(self.exit_flow_rate_history)) if len(self.exit_flow_rate_history) > 0 else 0
         debug_info = [
-            f"Exit Flow Rate: {self.last_exit_flow_rate:.3f}",
+            f"Exit Flow Rate: {self.last_exit_flow_rate*360:.3f}",
             f"Car Density: {self.get_car_density()}",
             f"Mean Car Density: {self.get_mean_car_density():.2f}",
             f"Mean Exit Flow Rate: {mean_exit_flow_rate}",
@@ -383,18 +393,7 @@ class Simulator:
         # Check if the car object exists in the list before attempting removal
         if car in self.cars:
             self.total_cars_exited += 1
-            if self.last_exited_car_tick == 0:
-                pass
-            else:
-                if self.total_ticks == self.last_exited_car_tick:
-                    self.delay_between_cars_exits_during_delta.append(0)
-                else:
-                    self.delay_between_cars_exits_during_delta.append((self.total_ticks - self.last_exited_car_tick))
-                self.last_exit_flow_rate = self.nb_cars_exit_delta/sum(self.delay_between_cars_exits_during_delta)
-                if len(self.delay_between_cars_exits_during_delta) >= self.nb_cars_exit_delta:
-                    self.delay_between_cars_exits_during_delta.pop(0)
-                self.exit_flow_rate_history.append(self.last_exit_flow_rate)
-            self.last_exited_car_tick = self.total_ticks
+            self.cars_exited_tick_during_delta.append(self.total_ticks)
 
             self.cars.remove(car)
             lifetime = self.total_ticks - car.creation_tick

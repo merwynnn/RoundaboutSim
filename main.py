@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
 import os # Import os module
+import csv # Import csv module
 
 # --- Simulation Setup ---
 use_gui = False  # Set to False for batch processing
@@ -79,7 +80,7 @@ def run_simulation_for_multiplier(args):
     intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols, car_flow_rate=120)
     simulator.initialize(intersections, roads, road_extremity_spawners, config_file=config_file_path, spawn_intervall_multiplier=multiplier)
 
-    max_ticks = 5000
+    max_ticks = 10000
     stability_ticks = 1000
     car_counts = []
     last_car_counts = []
@@ -139,14 +140,16 @@ def main():
     spawn_multipliers = list(np.arange(5, 2, -1)) + list(np.arange(2, 1, -0.5)) + list(np.arange(1, 0.3, -0.1)) + list(np.arange(0.3, 0.1, -0.05)) + list(np.arange(0.1, 0.01, -0.01))
     #spawn_multipliers = [1, 2, 3]
 
-    # config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
-    config_files = ['flow_config_1.xlsx'] # Use a single config for testing
+    config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
+    #config_files = ['flow_config_1.xlsx'] # Use a single config for testing
     colors = plt.cm.jet(np.linspace(0, 1, len(config_files))) # Generate distinct colors
+
+    all_simulation_results = [] # List to store all results
 
     try:
         for i, config_file in enumerate(config_files):
             config_file_path = os.path.join('configs', config_file)
-            config_file_path = "flow_config.xlsx"
+            #config_file_path = "flow_config.xlsx"
             print(f"Processing config file: {config_file_path}")
 
             pool_args = [(multiplier, config_file_path, n_rows, m_cols, use_gui) for multiplier in spawn_multipliers]
@@ -160,6 +163,13 @@ def main():
             for res_idx, res in enumerate(results):
                 if res and (res[0] > 0 or res[1] > 0):
                     valid_results_with_multipliers.append((spawn_multipliers[res_idx], res))
+                    # Store results for saving to file
+                    all_simulation_results.append({
+                        'config_file': config_file,
+                        'multiplier': spawn_multipliers[res_idx],
+                        'mean_density': res[0],
+                        'exit_flow_rate': res[1]
+                    })
 
             if not valid_results_with_multipliers:
                 continue
@@ -178,6 +188,18 @@ def main():
         plt.legend()
         plt.savefig("flow_vs_density_plot_with_multipliers.png")
         plt.show()
+
+        # Save all simulation results to a CSV file
+        results_file_path = "simulation_results.csv"
+        with open(results_file_path, 'w', newline='') as csvfile:
+            fieldnames = ['config_file', 'multiplier', 'mean_density', 'exit_flow_rate']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+
+            writer.writeheader()
+            for row in all_simulation_results:
+                writer.writerow(row)
+        print(f"Simulation results saved to {results_file_path}")
+
     except KeyboardInterrupt:
         print("\nCaught KeyboardInterrupt, terminating processes.")
         sys.exit(0)
