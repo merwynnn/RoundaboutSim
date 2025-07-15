@@ -60,7 +60,7 @@ class Simulator:
         self.total_cars_spawned_count = 0
         self.total_cars_exited = 0
 
-        self.flow_rate_time_delta = 240
+        self.flow_rate_time_delta = 120
         self.cars_exited_tick_during_delta = []
         self.last_exit_flow_rate = 0
         self.last_exited_car_tick = 0
@@ -72,7 +72,7 @@ class Simulator:
         self.car_density_history = []
         self.exit_flow_rate_history = []
 
-    def get_global_flow_rate(self):
+    def get_average_car_lifetime(self):
         if not self.car_lifetimes:
             return 0
         return sum(self.car_lifetimes) / len(self.car_lifetimes)

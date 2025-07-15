@@ -80,7 +80,7 @@ def run_simulation_for_multiplier(args):
     intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols, car_flow_rate=120)
     simulator.initialize(intersections, roads, road_extremity_spawners, config_file=config_file_path, spawn_intervall_multiplier=multiplier)
 
-    max_ticks = 10000
+    max_ticks = 5000
     stability_ticks = 1000
     car_counts = []
     last_car_counts = []
@@ -116,11 +116,12 @@ def run_simulation_for_multiplier(args):
     mean_flow_rate = (np.mean(flow_rates) if flow_rates else 0)*60*60
     mean_exit_flow_rate = (sum(simulator.exit_flow_rate_history)/len(simulator.exit_flow_rate_history))*60*60
     mean_density = np.mean(car_counts) if car_counts else 0
+    average_car_lifetime = simulator.get_average_car_lifetime() if simulator.car_lifetimes else 0
 
     flow_rate = simulator.get_real_entry_flow_rate()*60*60
     
-    print(f"  -> Mean Entry Flow Rate: {flow_rate:.4f}, Mean Exit Flow Rate: {mean_exit_flow_rate:.4f}, Flow Rate: {flow_rate:.4f}, Mean Density: {mean_density:.4f}")
-    return mean_density, mean_exit_flow_rate
+    print(f"  -> Mean Entry Flow Rate: {flow_rate:.4f}, Mean Exit Flow Rate: {mean_exit_flow_rate:.4f}, Flow Rate: {flow_rate:.4f}, Mean Density: {mean_density:.4f}, Average Car Lifetime: {average_car_lifetime:.4f}")
+    return mean_density, mean_exit_flow_rate, average_car_lifetime
 
 def main():
     # --- Experiment Parameters ---
@@ -128,20 +129,27 @@ def main():
     m_cols = 2
 
     # --- Matplotlib Setup ---
-    fig, ax = plt.subplots()
-    ax.set_ylabel("Flow Rate (Cars Exiting per tick)")
-    ax.set_xlabel("Mean Density (cars)")
-    ax.set_title("Global Flow Rate vs. Mean Density for Different Configurations")
-    ax.grid(True)
-    ax.set_xlim(0, 200) # Adjust as needed
-    ax.set_ylim(0, 400) # Adjust as needed
+    fig, ax1 = plt.subplots(figsize=(10, 6)) # Use ax1 for flow rate
+    ax2 = ax1.twinx() # Create a second y-axis for car lifetime
+
+    ax1.set_ylabel("Flow Rate (Cars Exiting per tick)", color='tab:blue')
+    ax1.set_xlabel("Mean Density (cars)")
+    ax1.set_title("Global Flow Rate and Average Car Lifetime vs. Mean Density")
+    ax1.grid(True)
+    ax1.set_xlim(0, 200) # Adjust as needed
+    ax1.set_ylim(0, 400) # Adjust as needed
+    ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+    ax2.set_ylabel("Average Car Lifetime (ticks)", color='tab:red')
+    ax2.set_ylim(0, 10000) # Adjust as needed for car lifetime
+    ax2.tick_params(axis='y', labelcolor='tab:red')
 
     # --- Main Experiment Loop ---
     spawn_multipliers = list(np.arange(5, 2, -1)) + list(np.arange(2, 1, -0.5)) + list(np.arange(1, 0.3, -0.1)) + list(np.arange(0.3, 0.1, -0.05)) + list(np.arange(0.1, 0.01, -0.01))
     #spawn_multipliers = [1, 2, 3]
 
     config_files = [f for f in os.listdir('configs') if f.endswith('.xlsx')]
-    #config_files = ['flow_config_1.xlsx'] # Use a single config for testing
+    config_files = ['flow_config_1.xlsx'] # Use a single config for testing
     colors = plt.cm.jet(np.linspace(0, 1, len(config_files))) # Generate distinct colors
 
     all_simulation_results = [] # List to store all results
@@ -149,7 +157,7 @@ def main():
     try:
         for i, config_file in enumerate(config_files):
             config_file_path = os.path.join('configs', config_file)
-            #config_file_path = "flow_config.xlsx"
+            config_file_path = "flow_config.xlsx"
             print(f"Processing config file: {config_file_path}")
 
             pool_args = [(multiplier, config_file_path, n_rows, m_cols, use_gui) for multiplier in spawn_multipliers]
@@ -161,14 +169,15 @@ def main():
             # Filter out cases where simulation might have failed or resulted in no cars
             valid_results_with_multipliers = []
             for res_idx, res in enumerate(results):
-                if res and (res[0] > 0 or res[1] > 0):
+                if res and (res[0] > 0 or res[1] > 0 or res[2] > 0): # Check all returned values
                     valid_results_with_multipliers.append((spawn_multipliers[res_idx], res))
                     # Store results for saving to file
                     all_simulation_results.append({
                         'config_file': config_file,
                         'multiplier': spawn_multipliers[res_idx],
                         'mean_density': res[0],
-                        'exit_flow_rate': res[1]
+                        'exit_flow_rate': res[1],
+                        'average_car_lifetime': res[2] # Store average car lifetime
                     })
 
             if not valid_results_with_multipliers:
@@ -178,21 +187,28 @@ def main():
             valid_multipliers = [item[0] for item in valid_results_with_multipliers]
             mean_densities = [item[1][0] for item in valid_results_with_multipliers]
             exit_flow_rates = [item[1][1] for item in valid_results_with_multipliers]
+            average_car_lifetimes = [item[1][2] for item in valid_results_with_multipliers] # Unpack average car lifetime
 
-            # Plotting
-            ax.plot(mean_densities, exit_flow_rates, marker='o', linestyle='-', color=colors[i], label=f'Config: {config_file}')
+            # Plotting on ax1 (Flow Rate)
+            ax1.plot(mean_densities, exit_flow_rates, marker='o', linestyle='-', color='tab:blue', label=f'Flow Rate - Config: {config_file}')
             for j, multiplier in enumerate(valid_multipliers):
-                ax.annotate(f'{multiplier:.2f}', (mean_densities[j], exit_flow_rates[j]), xytext=(5, 5), textcoords='offset points')
+                ax1.annotate(f'{multiplier:.2f}', (mean_densities[j], exit_flow_rates[j]), xytext=(5, 5), textcoords='offset points', color='tab:blue')
+
+            # Plotting on ax2 (Average Car Lifetime)
+            ax2.plot(mean_densities, average_car_lifetimes, marker='x', linestyle='--', color='tab:red', label=f'Avg Lifetime - Config: {config_file}')
+            for j, multiplier in enumerate(valid_multipliers):
+                ax2.annotate(f'{multiplier:.2f}', (mean_densities[j], average_car_lifetimes[j]), xytext=(5, -15), textcoords='offset points', color='tab:red')
+
 
         print("Experiment finished.")
-        plt.legend()
-        plt.savefig("flow_vs_density_plot_with_multipliers.png")
+        fig.legend(loc="upper left", bbox_to_anchor=(0.1, 0.9)) # Adjust legend position
+        plt.savefig("flow_lifetime_vs_density_plot.png") # New filename for the combined plot
         plt.show()
 
         # Save all simulation results to a CSV file
         results_file_path = "simulation_results.csv"
         with open(results_file_path, 'w', newline='') as csvfile:
-            fieldnames = ['config_file', 'multiplier', 'mean_density', 'exit_flow_rate']
+            fieldnames = ['config_file', 'multiplier', 'mean_density', 'exit_flow_rate', 'average_car_lifetime'] # Add new field
             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
             writer.writeheader()
