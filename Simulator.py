@@ -315,6 +315,7 @@ class Simulator:
             f"Car Density: {self.get_car_density()}",
             f"Mean Car Density: {self.get_mean_car_density():.2f}",
             f"Mean Exit Flow Rate: {mean_exit_flow_rate}",
+            f"Max Exit Flow Rate: {max(self.exit_flow_rate_history) if self.exit_flow_rate_history else 0:.3f}",
         ]
 
         debug_rect_width = 300

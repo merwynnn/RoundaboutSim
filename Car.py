@@ -2,6 +2,7 @@ import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
 import math
+from collections import deque
 
 class Car:
     
@@ -19,14 +20,18 @@ class Car:
         self.max_speed = 3.0 # Vitesse maximale autorisée
         self.max_intersection_speed = 2.0
         self.acceleration = 0
+        
+        self.reaction_time_ms = REACTION_TIME 
+        self.acceleration_queue = deque([0] * int(self.reaction_time_ms / (1000.0/60.0)), maxlen=int(self.reaction_time_ms / (1000.0/60.0)))
 
-        self.engine_force = 0.05  
+
+        self.engine_force = 0.05
         self.steering_speed = 5
 
         self.alpha = 5 # Increased alpha for stronger obstacle avoidance response
         self.beta = 3
         self.max_acceleration = 0.006
-        self.max_deceleration = -0.03 # Increased max_deceleration for quicker stops
+        self.max_deceleration = -0.06 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -47,10 +52,10 @@ class Car:
 
         
         self.detection_range_normal = self.car_height * 2.5
-        self.detection_angle_threshold_normal = 25.0 
+        self.detection_angle_threshold_normal = 70
 
         self.detection_range_angular = self.car_height * 1.7
-        self.detection_angle_threshold_angular = 35.0
+        self.detection_angle_threshold_angular = 50
         
         self.detection_range = self.detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
@@ -107,7 +112,18 @@ class Car:
 
         return closest_car_distance, car
 
+    def update_reaction_time(self, dt):
+        if dt > 0:
+            new_maxlen = int(self.reaction_time_ms / dt)
+            if new_maxlen != self.acceleration_queue.maxlen:
+                new_queue = deque([0] * new_maxlen, maxlen=new_maxlen)
+                # Keep the most recent values
+                for i in range(min(len(self.acceleration_queue), new_maxlen)):
+                    new_queue.append(self.acceleration_queue.pop())
+                self.acceleration_queue = new_queue
+
     def move(self, dt):
+        self.update_reaction_time(dt)
         time_factor = dt / (1000.0 / 60.0) if dt > 0 else 1
 
         if self.current_target_position:
@@ -183,7 +199,7 @@ class Car:
                         self.distance_to_intersection = math.inf
                         self.can_enter_intersection = True
             d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
-            if d<self.detection_range/5:
+            if d<self.detection_range/3:
                 self.acceleration = 0
                 self.speed = 0
                 return
@@ -199,6 +215,8 @@ class Car:
                 self.acceleration = max(new_acceleration, self.acceleration + self.max_deceleration)
             else:
                 self.acceleration = new_acceleration
+            
+            self.acceleration_queue.append(self.acceleration)
 
         else:
             self.acceleration = -self.engine_force*2
@@ -206,7 +224,7 @@ class Car:
             
 
         # --- Mise à jour de la position ---
-        self.speed += self.acceleration * time_factor
+        self.speed += self.acceleration_queue[0] * time_factor
         # max_speed was already determined above for the acceleration calculation
         self.speed = max(0, min(self.speed, current_max_speed))
 
@@ -346,7 +364,7 @@ class Car:
             pygame.draw.rect(win, (0, 255, 0), selection_rect, scaled_line_thickness)
 
 
-        if self.simulator.debug and self.selected:
+        if self.simulator.debug:
             debug_circle_radius = max(1, int(self.simulator.camera.get_scaled_value(5)))
             debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(1)))
 

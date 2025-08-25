@@ -108,7 +108,7 @@ def create_grid_setup(n, m):
     return intersections, roads, road_extremity_spawners
 
 
-time_multiplier = 1
+time_multiplier = 5
 
 tick = 0
 
@@ -116,7 +116,7 @@ while True:
     tick+=1
     if tick % 1000 == 0:
         print(f"  ... tick {tick}")
-    dt = 15
+    dt = time_multiplier
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:
@@ -142,12 +142,12 @@ while True:
             sys.exit()
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RIGHT:
-                if time_multiplier == 1:
-                    time_multiplier = 2
-                elif time_multiplier == 2:
-                    time_multiplier = 4
+                if time_multiplier == 5:
+                    time_multiplier = 10
+                elif time_multiplier == 10:
+                    time_multiplier = 15
                 else:
-                    time_multiplier = 1
+                    time_multiplier = 5
             elif event.key == pygame.K_d:
                 DEBUG = not DEBUG
                 simulator.debug = DEBUG
