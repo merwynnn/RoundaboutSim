@@ -10,7 +10,7 @@ STRIPE_WIDTH = 3
 
 DEBUG = False
 
-REACTION_TIME = 50
+REACTION_TIME = 400
 
 pygame.font.init()
 font = pygame.font.Font(None, 24)

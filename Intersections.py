@@ -9,6 +9,9 @@ class Intersection:
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
         self.exists = []
+
+        self.detection_range = 50 * 1.7
+        self.detection_angle_threshold = 50
         
 
     def update(self, dt):
@@ -34,6 +37,9 @@ class ClassicRoundabout(Intersection):
         self.radius = radius
         self.center = Vec2(pos)
         self.nb_lanes = 1
+
+        self.detection_range = 50 * 1.7
+        self.detection_angle_threshold = 50
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
         self.nb_target_to_check_before_enter = 7
@@ -146,6 +152,9 @@ class RedLightIntersection(Intersection):
         self.yellow_light_duration = yellow_light_duration
         self.timer = 0
         self.current_green_pair = (tuple(self.exits_dir[2]), tuple(self.exits_dir[3]))  # N-S green initially
+
+        self.detection_range = 50 * 2.5
+        self.detection_angle_threshold = 70
 
     def update(self, dt):
         self.timer += dt / 1000.0  # Convert dt from ms to seconds

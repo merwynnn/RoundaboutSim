@@ -41,3 +41,11 @@ class Camera:
                 # Panning should be inverse to mouse movement and scaled by zoom
                 self.position -= delta / self.zoom_level
                 self.drag_start_pos = drag_current_pos
+
+    def is_point_on_screen(self, point, margin=0):
+        # Convert world point to screen coordinates
+        screen_x, screen_y = self.apply(point)
+
+        # Check if the point is within the screen boundaries with an optional margin
+        return (-margin <= screen_x < self.width + margin and
+                -margin <= screen_y < self.height + margin)

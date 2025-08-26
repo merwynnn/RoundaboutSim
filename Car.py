@@ -3,6 +3,7 @@ from pygame import Vector2 as Vec2
 from Constants import *
 import math
 from collections import deque
+pygame.font.init() # Initialize font module
 
 class Car:
     
@@ -46,16 +47,12 @@ class Car:
         else:
             self.car_image = pygame.Surface((40, 40))
             self.car_image.fill((255, 0, 0))
-        self.car_width = self.car_image.get_width() if self.car_image else 40
-        self.car_height = self.car_image.get_height() if self.car_image else 40
-
+        self.car_width = 25
+        self.car_height = 35
 
         
         self.detection_range_normal = self.car_height * 2.5
         self.detection_angle_threshold_normal = 70
-
-        self.detection_range_angular = self.car_height * 1.7
-        self.detection_angle_threshold_angular = 50
         
         self.detection_range = self.detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
@@ -77,6 +74,7 @@ class Car:
         self.distance_to_intersection = math.inf
         self.distance_on_exit_road = math.inf
 
+        self.critical_distance = math.sqrt((self.car_width/2)**2 + (self.car_height/2)**2)*2.25
 
         
 
@@ -91,7 +89,7 @@ class Car:
             if other_car is self or (self.status=="APPROACHING" and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection != self.current_target_extremity.intersection)or ((self.status == "INTERSECTION" or self.status == "EXITING") and other_car.status == "APPROACHING" and other_car.current_target_extremity.intersection == self.current_target_extremity.intersection):
                 continue
             
-            start_pos = self.pos+self.dir*self.car_height/2
+            start_pos = self.pos
             vector_to_other = other_car.pos - start_pos
             distance = vector_to_other.length()
             if 0 < distance < self.detection_range:
@@ -199,15 +197,17 @@ class Car:
                         self.distance_to_intersection = math.inf
                         self.can_enter_intersection = True
             d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
-            if d<self.detection_range/3:
+            if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
                 self.speed = 0
                 return
 
             # Determine max_speed based on context (intersection or straight road)
             current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
-            
-            new_acceleration = self.beta * (1- self.speed/current_max_speed) - self.alpha * (1-d/self.detection_range)
+            brake = 0
+            if d < self.detection_range:
+                brake = self.alpha * (1-(d/self.detection_range))
+            new_acceleration = self.beta * (1- self.speed/current_max_speed) - brake
             ### make sure acceleration shift is not too important, if it is clamp
             if new_acceleration > self.acceleration:
                 self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
@@ -232,9 +232,6 @@ class Car:
             self.acceleration = 0
 
         speed = self.speed
-        if self.speed < 0.2:
-            speed = 0
-            self.acceleration = 0
 
         self.acceleration = min(max(self.acceleration, -0.3), 0.3)
             
@@ -272,8 +269,9 @@ class Car:
             self.status = "INTERSECTION"
 
                         
-            self.detection_range = self.detection_range_angular
-            self.detection_angle_threshold = self.detection_angle_threshold_angular
+            self.detection_range = self.last_extremity.intersection.detection_range
+            self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
+            
 
 
 
@@ -352,6 +350,8 @@ class Car:
         else:
             win.blit(rotated_image, new_rect.topleft)
 
+        if not self.simulator.camera.is_point_on_screen(self.pos):
+            return
         if self.selected:
             scaled_offset = self.simulator.camera.get_scaled_value(5) # Scale offset for selection box
             scaled_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(2))) # Scale line thickness
@@ -362,9 +362,19 @@ class Car:
                 new_rect.height + 2 * scaled_offset
             )
             pygame.draw.rect(win, (0, 255, 0), selection_rect, scaled_line_thickness)
-
-
         if self.simulator.debug:
+            # Get detection distance once
+            closest_obstacle_distance, _ = self.check_front()
+
+            # Display detection distance
+            if closest_obstacle_distance != math.inf:
+                font_size = max(10, int(self.simulator.camera.get_scaled_value(12)))
+                font = pygame.font.Font(None, font_size)
+                text_surface = font.render(f"{int(closest_obstacle_distance)}", True, (255, 255, 255)) # White text
+                text_rect = text_surface.get_rect(center=(transformed_center.x, transformed_center.y - scaled_car_size // 2 - 10)) # Above the car
+                win.blit(text_surface, text_rect)
+
+
             debug_circle_radius = max(1, int(self.simulator.camera.get_scaled_value(5)))
             debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(1)))
 
@@ -373,18 +383,17 @@ class Car:
                 transformed_debug_target = self.simulator.camera.apply(target_pos_to_draw)
                 pygame.draw.circle(win, (0, 0, 255), transformed_debug_target, debug_circle_radius)
 
-            d = self.check_front()[0]
             color_value = 0
             # self.detection_range is in world units, no direct scaling here for the logic.
-            if d == math.inf or self.detection_range == 0:
+            if closest_obstacle_distance == math.inf or self.detection_range == 0:
                  color = (0,255,0)
             else:
-                color_value = int(255 - (d / self.detection_range) * 255)
+                color_value = int(255 - (closest_obstacle_distance / self.detection_range) * 255)
                 color_value = max(0, min(255, color_value))
                 color = (0, color_value, 0)
 
             # world_start_point uses self.car_height (world unit)
-            world_start_point = self.pos + self.dir * self.car_height // 2
+            world_start_point = self.pos
             transformed_start_point = self.simulator.camera.apply(world_start_point)
 
             if self.dir.length_squared() > 0:
