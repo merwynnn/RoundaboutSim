@@ -31,7 +31,7 @@ class Simulator:
                     print(f"Warning: Could not load car image {fpath}: {e}")
         if not images:
             # Fallback: create a dummy surface
-            img = pygame.Surface((40, 40))
+            img = pygame.Surface((int(40 / 8), int(40 / 8)))
             img.fill((255, 0, 0))
             images.append(img)
         return images
@@ -46,7 +46,7 @@ class Simulator:
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
 
-        self.spatial_grid = SpatialGrid(WIDTH * 10, HEIGHT * 10, 100)
+        self.spatial_grid = SpatialGrid(WIDTH * 10, HEIGHT * 10, 100 / 8)
 
         self.initialized = False
 
@@ -144,8 +144,8 @@ class Simulator:
         for road in self.roads:
              self.all_extremities.add(road.start_extremity)
              self.all_extremities.add(road.end_extremity)
-        # --- End of existing setup ---
 
+        self.camera.position = self.intersections[0].pos if self.intersections else self.roads[0].start_extremity.pos if self.roads else Vec2(0, 0)
 
         self._neighbor_map = None
 

@@ -10,7 +10,7 @@ class Intersection:
         self.simulator = Simulator.get_instance()
         self.exists = []
 
-        self.detection_range = 50 * 1.7
+        self.min_detection_range = REAL_CAR_LENGTH * 2.5
         self.detection_angle_threshold = 50
         
 
@@ -38,11 +38,13 @@ class ClassicRoundabout(Intersection):
         self.center = Vec2(pos)
         self.nb_lanes = 1
 
-        self.detection_range = 50 * 1.7
+        self.min_detection_range = REAL_CAR_LENGTH * 2.5
         self.detection_angle_threshold = 50
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
         self.nb_target_to_check_before_enter = 7
+
+        self.speed_enter_threshold = 1.0 # m/s, cars moving slower than this are considered "slow" when checking if a car can enter the roundabout
 
         self.exits = []
         for exit_dir in exits_dir:
@@ -73,7 +75,7 @@ class ClassicRoundabout(Intersection):
              pygame.draw.circle(win, (255, 255, 255), transformed_center, inner_radius, scaled_stripe_width)
 
         if self.simulator.debug:
-            debug_radius = max(1, int(self.simulator.camera.get_scaled_value(4)))
+            debug_radius = max(1, int(self.simulator.camera.get_scaled_value(0.5)))
             for i, target in enumerate(self.targets):
                 transformed_target = self.simulator.camera.apply(target)
                 pygame.draw.circle(win, (10, 0, 0), transformed_target, debug_radius)
@@ -85,7 +87,7 @@ class ClassicRoundabout(Intersection):
         Returns a list of Vec2 points evenly spaced along the circumference of the roundabout.
         """
         points = []
-        radius = self.radius - LANE_WIDTH//2
+        radius = self.radius - LANE_WIDTH/2
         
         for i in range(n_points):
             angle = (2 * math.pi / n_points) * i
@@ -131,13 +133,13 @@ class ClassicRoundabout(Intersection):
             if self.cars_between_targets[btw_index]:
                 # Check for slow-moving cars in critical segments
                 for car_in_segment in self.cars_between_targets[btw_index]:
-                    if car_in_segment.speed > 0.25 or i < 2: # Speed threshold
+                    if car_in_segment.speed > self.speed_enter_threshold or i < 2: # Speed threshold
                         return False 
                     
         return True
 
 class RedLightIntersection(Intersection):
-    def __init__(self, pos, exits_dir, light_duration=5, yellow_light_duration=1, size=LANE_WIDTH*6):
+    def __init__(self, pos, exits_dir, light_duration=10, yellow_light_duration=3, size=LANE_WIDTH*6):
         super().__init__(pos)
         self.size = size
         self.exits_dir = exits_dir
@@ -153,11 +155,11 @@ class RedLightIntersection(Intersection):
         self.timer = 0
         self.current_green_pair = (tuple(self.exits_dir[2]), tuple(self.exits_dir[3]))  # N-S green initially
 
-        self.detection_range = 50 * 2.5
+        self.min_detection_range = REAL_CAR_LENGTH * 2
         self.detection_angle_threshold = 70
 
     def update(self, dt):
-        self.timer += dt / 1000.0  # Convert dt from ms to seconds
+        self.timer += dt
 
         total_cycle_time = self.light_duration + self.yellow_light_duration
 
@@ -205,10 +207,12 @@ class RedLightIntersection(Intersection):
     def draw(self, win):
         # Draw the intersection asphalt
         size = self.size
-        p1 = self.pos + Vec2(-size / 2, -size / 2)
-        p2 = self.pos + Vec2(size / 2, -size / 2)
-        p3 = self.pos + Vec2(size / 2, size / 2)
-        p4 = self.pos + Vec2(-size / 2, size / 2)
+        pos = self.pos
+
+        p1 = pos + Vec2(-size / 2, -size / 2)
+        p2 = pos + Vec2(size / 2, -size / 2)
+        p3 = pos + Vec2(size / 2, size / 2)
+        p4 = pos + Vec2(-size / 2, size / 2)
 
         p1_transformed = self.simulator.camera.apply(p1)
         p2_transformed = self.simulator.camera.apply(p2)
@@ -218,11 +222,11 @@ class RedLightIntersection(Intersection):
         pygame.draw.polygon(win, ROAD_COLOR, [p1_transformed, p2_transformed, p3_transformed, p4_transformed])
 
         # Draw the traffic lights
-        light_radius = self.simulator.camera.get_scaled_value(5)
+        light_radius = self.simulator.camera.get_scaled_value(0.5)
         for exit_dir_tuple, state in self.lights.items():
             exit_dir = Vec2(exit_dir_tuple)
             # Position the light near the intersection edge
-            light_pos = self.pos + exit_dir * (self.size / 2)
+            light_pos = pos + exit_dir * (size / 2)
             transformed_light_pos = self.simulator.camera.apply(light_pos)
 
             color = (128, 128, 128) # Grey for off
@@ -254,7 +258,7 @@ class RedLightIntersection(Intersection):
             path = [start_pos, control_point, end_pos]
         # Left turn
         else:
-            control_point1 = start_pos + start_dir * self.size *0.4
+            control_point1 = start_pos + start_dir * self.size * 0.4
             path = [start_pos, control_point1, self.pos, end_pos]
 
         is_last_pos = current_target_index >= len(path) - 1

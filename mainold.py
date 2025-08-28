@@ -25,8 +25,8 @@ def create_grid_setup(n, m):
     roads = []
     road_extremity_spawners = []
 
-    fixed_road_length = 500
-    roundabout_radius = 100
+    fixed_road_length = 80
+    roundabout_radius = 17.5
     # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
@@ -108,7 +108,7 @@ def create_grid_setup(n, m):
     return intersections, roads, road_extremity_spawners
 
 
-time_multiplier = 5
+time_multiplier = 1
 
 tick = 0
 
@@ -116,7 +116,7 @@ while True:
     tick+=1
     if tick % 1000 == 0:
         print(f"  ... tick {tick}")
-    dt = time_multiplier
+    dt = DT * time_multiplier
     events = pygame.event.get()
     for event in events:
         if event.type == pygame.QUIT:
@@ -142,54 +142,16 @@ while True:
             sys.exit()
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_RIGHT:
-                if time_multiplier == 5:
-                    time_multiplier = 10
-                elif time_multiplier == 10:
-                    time_multiplier = 15
+                if time_multiplier == 1:
+                    time_multiplier = 2
+                elif time_multiplier == 2:
+                    time_multiplier = 3
                 else:
-                    time_multiplier = 5
+                    time_multiplier = 1
             elif event.key == pygame.K_d:
                 DEBUG = not DEBUG
                 simulator.debug = DEBUG
             elif event.key == pygame.K_1:
-                intersections_0 = [ClassicRoundabout((400, 400), 100, [Vec2(-1, 0), Vec2(1, 0), Vec2(0, -1), Vec2(0, 1)]),]
-
-                ext1 = RoadExtremity((0, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext2 = RoadExtremity((WIDTH*2, HEIGHT//2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_3 = RoadExtremity((WIDTH//2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_4 = RoadExtremity((WIDTH//2, HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-
-                roads_0 = [Road(ext1, intersections_0[0].exits[0]), Road(ext2, intersections_0[0].exits[1]), Road(ext_3, intersections_0[0].exits[2]), Road(ext_4, intersections_0[0].exits[3])]
-
-                road_extremity_spawners_0 = [ext1, ext2, ext_3, ext_4]
-                simulator.initialize(intersections_0, roads_0, road_extremity_spawners_0)
-            elif event.key == pygame.K_2:
-                # Red Light Intersection setup
-                intersection_pos = (WIDTH // 2, HEIGHT // 2)
-                exits_dir = [Vec2(0, -1), Vec2(1, 0), Vec2(0, 1), Vec2(-1, 0)] # N, E, S, W
-                red_light_intersection = RedLightIntersection(intersection_pos, exits_dir)
-
-                # Road extremities
-                ext_n = RoadExtremity((WIDTH // 2, 0), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_e = RoadExtremity((WIDTH, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_s = RoadExtremity((WIDTH // 2, HEIGHT), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                ext_w = RoadExtremity((0, HEIGHT // 2), spawn_cars=True, spawn_cars_timer=car_flow_rate)
-                
-                # Roads connecting extremities to the intersection
-                roads_2 = [
-                    Road(ext_n, red_light_intersection.exits[0]),
-                    Road(ext_e, red_light_intersection.exits[1]),
-                    Road(ext_s, red_light_intersection.exits[2]),
-                    Road(ext_w, red_light_intersection.exits[3]),
-                    Road(red_light_intersection.exits[0], ext_n),
-                    Road(red_light_intersection.exits[1], ext_e),
-                    Road(red_light_intersection.exits[2], ext_s),
-                    Road(red_light_intersection.exits[3], ext_w)
-                ]
-
-                road_extremity_spawners_2 = [ext_n, ext_e, ext_s, ext_w]
-                simulator.initialize([red_light_intersection], roads_2, road_extremity_spawners_2)
-            elif event.key == pygame.K_3:
                 n_rows = 2
                 m_cols = 2
                 intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)

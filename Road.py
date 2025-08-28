@@ -24,18 +24,20 @@ class RoadExtremity:
         self.spawn_cars_timer = spawn_cars_timer
         self.timer = 0
 
+        self.security_spawn_distance = 6 # minimum distance between two spawned cars
+
      
         self.last_spawned_car = None
 
             
     def update(self, dt):
         if self.spawn_cars:
-            self.timer += 0.05*dt
+            self.timer += dt
             if self.timer >= self.spawn_cars_timer:
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
                 if self.last_spawned_car:
-                    if (self.last_spawned_car.pos - self.pos).length() > 50:
+                    if (self.last_spawned_car.pos - self.pos).length() > self.security_spawn_distance:
                         self.last_spawned_car = Simulator.get_instance().spawn_car(self)
                 else:
                     self.last_spawned_car = Simulator.get_instance().spawn_car(self)
@@ -87,14 +89,13 @@ class Road:
         self.dir = self.dir.normalize()
         self.dir_orth = Vec2(-self.dir.y, self.dir.x)
 
-        pos_delta = self.dir_orth * LANE_WIDTH // 2
-        x_delta = Vec2(5, 0)
+        pos_delta = self.dir_orth * LANE_WIDTH / 2
 
         self.lanes_start_end_position = [(self.start_extremity.pos+pos_delta, self.end_extremity.pos+pos_delta), (self.end_extremity.pos-pos_delta, self.start_extremity.pos-pos_delta )]
 
     def draw(self, win):
         
-        delta = self.dir_orth * (self.nb_lanes//2 + (self.nb_lanes%2)/2) * LANE_WIDTH
+        delta = self.dir_orth * (self.nb_lanes/2 + (self.nb_lanes%2)/2) * LANE_WIDTH
         
         # main polygon
         p1_transformed = self.simulator.camera.apply(self.start_extremity.pos - delta)
@@ -105,17 +106,17 @@ class Road:
         pygame.draw.polygon(win, ROAD_COLOR, [p1_transformed, p2_transformed, p3_transformed, p4_transformed])
 
         # left right stripe
-        p1_ls_transformed = self.simulator.camera.apply(self.start_extremity.pos - delta + self.dir_orth * STRIPE_WIDTH//2)
-        p2_ls_transformed = self.simulator.camera.apply(self.start_extremity.pos - delta + self.dir_orth * (STRIPE_WIDTH//2 + STRIPE_WIDTH))
-        p3_ls_transformed = self.simulator.camera.apply(self.end_extremity.pos - delta + self.dir_orth * (STRIPE_WIDTH//2 + STRIPE_WIDTH))
-        p4_ls_transformed = self.simulator.camera.apply(self.end_extremity.pos - delta + self.dir_orth * STRIPE_WIDTH//2)
+        p1_ls_transformed = self.simulator.camera.apply(self.start_extremity.pos - delta + self.dir_orth * STRIPE_WIDTH/2)
+        p2_ls_transformed = self.simulator.camera.apply(self.start_extremity.pos - delta + self.dir_orth * (STRIPE_WIDTH/2 + STRIPE_WIDTH))
+        p3_ls_transformed = self.simulator.camera.apply(self.end_extremity.pos - delta + self.dir_orth * (STRIPE_WIDTH/2 + STRIPE_WIDTH))
+        p4_ls_transformed = self.simulator.camera.apply(self.end_extremity.pos - delta + self.dir_orth * STRIPE_WIDTH/2)
 
         pygame.draw.polygon(win, (255, 255, 255), [p1_ls_transformed, p2_ls_transformed, p3_ls_transformed, p4_ls_transformed])
 
-        p1_rs_transformed = self.simulator.camera.apply(self.start_extremity.pos + delta - self.dir_orth * STRIPE_WIDTH//2)
-        p2_rs_transformed = self.simulator.camera.apply(self.start_extremity.pos + delta - self.dir_orth * (STRIPE_WIDTH//2 + STRIPE_WIDTH))
-        p3_rs_transformed = self.simulator.camera.apply(self.end_extremity.pos + delta - self.dir_orth * (STRIPE_WIDTH//2 + STRIPE_WIDTH))
-        p4_rs_transformed = self.simulator.camera.apply(self.end_extremity.pos + delta - self.dir_orth * STRIPE_WIDTH//2)
+        p1_rs_transformed = self.simulator.camera.apply(self.start_extremity.pos + delta - self.dir_orth * STRIPE_WIDTH/2)
+        p2_rs_transformed = self.simulator.camera.apply(self.start_extremity.pos + delta - self.dir_orth * (STRIPE_WIDTH/2 + STRIPE_WIDTH))
+        p3_rs_transformed = self.simulator.camera.apply(self.end_extremity.pos + delta - self.dir_orth * (STRIPE_WIDTH/2 + STRIPE_WIDTH))
+        p4_rs_transformed = self.simulator.camera.apply(self.end_extremity.pos + delta - self.dir_orth * STRIPE_WIDTH/2)
 
         pygame.draw.polygon(win, (255, 255, 255), [p1_rs_transformed, p2_rs_transformed, p3_rs_transformed, p4_rs_transformed])
 
@@ -125,7 +126,7 @@ class Road:
             p1_stripe_transformed = self.simulator.camera.apply(self.start_extremity.pos + delta - stripe_delta_world)
             p2_stripe_transformed = self.simulator.camera.apply(self.end_extremity.pos + delta - stripe_delta_world)
 
-            pygame.draw.line(win, (255, 255, 255), p1_stripe_transformed, p2_stripe_transformed, STRIPE_WIDTH) # STRIPE_WIDTH will be scaled later
+            pygame.draw.line(win, (255, 255, 255), p1_stripe_transformed, p2_stripe_transformed, int(to_pixel(STRIPE_WIDTH))) # STRIPE_WIDTH will be scaled later
 
         if self.simulator.debug:
 

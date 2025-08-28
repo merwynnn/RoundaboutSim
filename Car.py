@@ -18,21 +18,19 @@ class Car:
         self.selected = False # Add selected attribute
 
         self.speed = 0
-        self.max_speed = 3.0 # Vitesse maximale autorisée
-        self.max_intersection_speed = 2.0
+        self.max_speed = 13.8889 # Vitesse maximale autorisée
+        self.max_intersection_speed = 8.33333
         self.acceleration = 0
         
         self.reaction_time_ms = REACTION_TIME 
-        self.acceleration_queue = deque([0] * int(self.reaction_time_ms / (1000.0/60.0)), maxlen=int(self.reaction_time_ms / (1000.0/60.0)))
+        self.acceleration_queue = deque([0] * int(self.reaction_time_ms), maxlen=int(self.reaction_time_ms))
 
+        self.steering_speed = 40
 
-        self.engine_force = 0.05
-        self.steering_speed = 5
-
-        self.alpha = 5 # Increased alpha for stronger obstacle avoidance response
-        self.beta = 3
-        self.max_acceleration = 0.006
-        self.max_deceleration = -0.06 # Increased max_deceleration for quicker stops
+        self.alpha = 15 # Increased alpha for stronger obstacle avoidance response
+        self.beta = 0.375
+        self.max_acceleration = 2
+        self.max_deceleration = -2000 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -47,14 +45,13 @@ class Car:
         else:
             self.car_image = pygame.Surface((40, 40))
             self.car_image.fill((255, 0, 0))
-        self.car_width = 25
-        self.car_height = 35
 
         
-        self.detection_range_normal = self.car_height * 2.5
+        self.min_detection_range_normal = REAL_CAR_LENGTH*2
         self.detection_angle_threshold_normal = 70
         
-        self.detection_range = self.detection_range_normal
+        self.min_detection_range = self.min_detection_range_normal
+        self.detection_range = self.min_detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
         
         # Targets
@@ -67,14 +64,14 @@ class Car:
         self.current_target_index = 0
 
         self.intersection_delta = 0
-        self.target_delta = -20
+        self.target_delta = -2.5
 
         self.can_enter_intersection = False
 
         self.distance_to_intersection = math.inf
         self.distance_on_exit_road = math.inf
 
-        self.critical_distance = math.sqrt((self.car_width/2)**2 + (self.car_height/2)**2)*2.25
+        self.critical_distance = math.sqrt((REAL_CAR_WIDTH/2)**2 + (REAL_CAR_LENGTH/2)**2)*2
 
         
 
@@ -122,19 +119,20 @@ class Car:
 
     def move(self, dt):
         self.update_reaction_time(dt)
-        time_factor = dt / (1000.0 / 60.0) if dt > 0 else 1
+
+        self.detection_range = max(self.min_detection_range, (self.speed*3.6)/2 + 1)
 
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
             distance = target_vector.length()
-            if distance > self.speed*5: # target position not reached
+            if distance > self.critical_distance/2: # target position not reached
 
                 target_dir = target_vector.normalize()
                 # Tourner progressivement vers la cible
                 angle = self.dir.angle_to(target_dir)
                 angle = (angle + 180) % 360 - 180
                 if abs(angle) > self.steering_speed:
-                    self.dir = self.dir.rotate(self.steering_speed * math.copysign(1, angle) * time_factor)
+                    self.dir = self.dir.rotate(self.steering_speed * math.copysign(1, angle) * dt)
                 else:
                     self.dir = target_dir                    
 
@@ -152,12 +150,17 @@ class Car:
             distance_to_obstacle, obstacle = self.check_front()
 
             if self.status == "INTERSECTION":
+                """
                 if obstacle:
                     if obstacle.speed > 1.5:
-                        distance_to_obstacle = math.inf
+                        distance_to_obstacle = math.inf """
 
             self.distance_on_exit_road = math.inf
             if (self.status == "INTERSECTION" and self.reached_last_intersection_target) or self.status == "EXITING":
+                """
+                Find the closest car on the exit road, in front of the intersection exit.
+                This is to detect if there's a car blocking the exit of the intersection or on the road after the intersection.
+                """
                 exit_road = self.current_target_extremity if self.status == "INTERSECTION" else self.last_extremity
                 exit_point, exit_dir = exit_road.get_start_car_pos_dir()
 
@@ -165,17 +168,15 @@ class Car:
                     if other_car is self:
                         continue
 
-                    # Check if the other car is on the exit road, in front of the intersection exit
+                    # Project the vector from the exit point to the other car onto the exit direction
                     vec_from_exit_to_other = other_car.pos - exit_point
-                    
-                    # Project the vector onto the exit direction
                     proj = vec_from_exit_to_other.dot(exit_dir)
 
                     if proj > 0: # If the car is physically after the exit point of the intersection
                         # Check if the car is reasonably aligned with the road
                         # and close enough to be a concern.
                         dist_to_road_line = (exit_point + proj * exit_dir) - other_car.pos
-                        if dist_to_road_line.length() < 15: # 15 pixels tolerance from road center line
+                        if dist_to_road_line.length() < 1.875:
                             
                             # It's on the road, calculate distance from our car
                             dist_to_other_car = (other_car.pos - self.pos).length()
@@ -186,16 +187,26 @@ class Car:
             self.distance_to_intersection = math.inf
 
             if self.status == "APPROACHING" and self.current_target_extremity.intersection:     # Approaching intersection
-                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0] - self.pos).length() 
-                if self.distance_to_intersection > self.detection_range:
+                # Calculate distance to intersection
+                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0] - self.pos).length()
+                
+                # If the car is already within the intersection's detection range, set distance to infinity
+                if self.distance_to_intersection > self.detection_range/2:
                     self.distance_to_intersection = math.inf
                 
-                if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < self.engine_force*500:    # reached target
+                # Check if the car has reached the target
+                if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < 4: 
+                    # If the car has reached the target, check if it can enter the intersection
                     if self.can_enter_intersection:
+                        # If it can enter the intersection, set the distance to infinity
                         self.distance_to_intersection = math.inf
-                    elif self.current_target_extremity.intersection.can_car_enter(self.current_target_extremity):
-                        self.distance_to_intersection = math.inf
-                        self.can_enter_intersection = True
+                    else:
+                        # If it cannot enter the intersection, check if the current target's intersection can let the car enter
+                        if self.current_target_extremity.intersection.can_car_enter(self.current_target_extremity):
+                            # If it can enter, set the distance to infinity and mark that the car can enter the intersection
+                            self.distance_to_intersection = math.inf
+                            self.can_enter_intersection = True
+
             d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
@@ -204,10 +215,11 @@ class Car:
 
             # Determine max_speed based on context (intersection or straight road)
             current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
-            brake = 0
-            if d < self.detection_range:
-                brake = self.alpha * (1-(d/self.detection_range))
-            new_acceleration = self.beta * (1- self.speed/current_max_speed) - brake
+
+            if d < self.detection_range:    # brake
+                new_acceleration = -self.alpha * (1-(d/self.detection_range))
+            else:
+                new_acceleration = self.beta * (1- self.speed/current_max_speed)
             ### make sure acceleration shift is not too important, if it is clamp
             if new_acceleration > self.acceleration:
                 self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
@@ -218,24 +230,21 @@ class Car:
             
             self.acceleration_queue.append(self.acceleration)
 
-        else:
-            self.acceleration = -self.engine_force*2
+        else:  # No current target position -> stop the car
+            self.acceleration = -self.alpha
             self.current_target_position = self.get_next_target_position()
             
 
         # --- Mise à jour de la position ---
-        self.speed += self.acceleration_queue[0] * time_factor
+        dv = self.acceleration * dt
+        self.speed += dv
+        #self.speed += self.acceleration_queue[0] * dt
+
         # max_speed was already determined above for the acceleration calculation
         self.speed = max(0, min(self.speed, current_max_speed))
-
-        if self.speed == current_max_speed or self.speed == 0:
-            self.acceleration = 0
-
-        speed = self.speed
-
-        self.acceleration = min(max(self.acceleration, -0.3), 0.3)
-            
-        self.pos += self.dir * speed * time_factor
+        
+        dpos = self.dir * self.speed * dt
+        self.pos += dpos
 
     def get_next_target_extremity(self):
         self.path.pop(0)        
@@ -249,7 +258,7 @@ class Car:
             self.last_extremity = self.current_target_extremity
 
 
-            return self.current_target_extremity.get_start_car_pos_dir(delta=-5)[0]
+            return self.current_target_extremity.get_start_car_pos_dir(delta=-0.6)[0]
         
         elif self.status=="INTERSECTION":  # is in intersection
             self.can_enter_intersection = False
@@ -269,7 +278,7 @@ class Car:
             self.status = "INTERSECTION"
 
                         
-            self.detection_range = self.last_extremity.intersection.detection_range
+            self.min_detection_range = self.last_extremity.intersection.min_detection_range
             self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
             
 
@@ -283,7 +292,7 @@ class Car:
             self.current_target_extremity = self.get_next_target_extremity()
             self.status="APPROACHING"
 
-            self.detection_range = self.detection_range_normal
+            self.min_detection_range = self.min_detection_range_normal
             self.detection_angle_threshold = self.detection_angle_threshold_normal
 
             return self.last_extremity.get_end_car_pos_dir()[0]
@@ -327,8 +336,7 @@ class Car:
 
     def draw(self, win):
         # Car image scaling
-        base_car_size = 40 # Assuming the preloaded car_image is 40x40 at zoom_level 1.0
-        scaled_car_size = int(self.simulator.camera.get_scaled_value(base_car_size))
+        scaled_car_size = int(self.simulator.camera.get_scaled_value(REAL_CAR_LENGTH))  # Scale based on car height
         if scaled_car_size < 1: scaled_car_size = 1
 
         # Scale the car_image (which is the one from preloaded_car_images)
@@ -353,8 +361,8 @@ class Car:
         if not self.simulator.camera.is_point_on_screen(self.pos):
             return
         if self.selected:
-            scaled_offset = self.simulator.camera.get_scaled_value(5) # Scale offset for selection box
-            scaled_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(2))) # Scale line thickness
+            scaled_offset = self.simulator.camera.get_scaled_value(0.1) # Scale offset for selection box
+            scaled_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(0.3))) # Scale line thickness
             selection_rect = pygame.Rect(
                 new_rect.left - scaled_offset,
                 new_rect.top - scaled_offset,
@@ -368,15 +376,15 @@ class Car:
 
             # Display detection distance
             if closest_obstacle_distance != math.inf:
-                font_size = max(10, int(self.simulator.camera.get_scaled_value(12)))
+                font_size = max(10, int(self.simulator.camera.get_scaled_value(1.5)))
                 font = pygame.font.Font(None, font_size)
                 text_surface = font.render(f"{int(closest_obstacle_distance)}", True, (255, 255, 255)) # White text
                 text_rect = text_surface.get_rect(center=(transformed_center.x, transformed_center.y - scaled_car_size // 2 - 10)) # Above the car
                 win.blit(text_surface, text_rect)
 
 
-            debug_circle_radius = max(1, int(self.simulator.camera.get_scaled_value(5)))
-            debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(1)))
+            debug_circle_radius = max(1, int(self.simulator.camera.get_scaled_value(0.5)))
+            debug_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(0.3)))
 
             if self.current_target_position:
                 target_pos_to_draw = self.current_target_position
@@ -426,5 +434,5 @@ class Car:
         distance_to_car_center = (world_pos - self.pos).length()
         # car_width and car_height are world units if not scaled with image.
         # For click detection, using a fixed world-unit radius is reasonable.
-        click_radius = (self.car_width + self.car_height) / 4
+        click_radius = (BASE_CAR_LENGTH/8)  # Fixed radius in world units
         return distance_to_car_center < click_radius
