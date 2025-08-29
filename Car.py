@@ -340,6 +340,9 @@ class Car:
         win.blit(rotated_surface, new_rect.topleft)
 
     def draw(self, win):
+        
+        if not self.simulator.camera.is_point_on_screen(self.pos, margin=40):
+            return
         # Car image scaling
         scaled_car_size = int(self.simulator.camera.get_scaled_value(REAL_CAR_LENGTH))  # Scale based on car height
         if scaled_car_size < 1: scaled_car_size = 1
@@ -363,8 +366,6 @@ class Car:
         else:
             win.blit(rotated_image, new_rect.topleft)
 
-        if not self.simulator.camera.is_point_on_screen(self.pos):
-            return
         if self.selected:
             scaled_offset = self.simulator.camera.get_scaled_value(0.1) # Scale offset for selection box
             scaled_line_thickness = max(1, int(self.simulator.camera.get_scaled_value(0.3))) # Scale line thickness

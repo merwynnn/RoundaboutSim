@@ -15,6 +15,9 @@ pygame.display.set_caption("Roundabout Simulator")
 
 clock = pygame.time.Clock()
 
+# Font for FPS display
+font = pygame.font.Font(None, 30)
+
 simulator = Simulator(win)
 
 car_flow_rate = 120
@@ -160,5 +163,11 @@ while True:
 
     if simulator:
         simulator.update(dt, events)
+
+    # Display FPS
+    clock.tick()
+    fps = clock.get_fps()
+    fps_text = font.render(f"FPS: {int(fps)}", True, (255, 255, 255)) # White color
+    win.blit(fps_text, (10, 10)) # Position at top-left
 
     pygame.display.update()
