@@ -18,6 +18,7 @@ class Car:
         self.selected = False # Add selected attribute
 
         self.speed = 0
+        self.target_speed = 0
         self.max_speed = 13.8889 # Vitesse maximale autorisée
         self.max_intersection_speed = 8.33333
         self.acceleration = 0
@@ -30,7 +31,7 @@ class Car:
         self.alpha = 15 # Increased alpha for stronger obstacle avoidance response
         self.beta = 0.375
         self.max_acceleration = 2
-        self.max_deceleration = -2000 # Increased max_deceleration for quicker stops
+        self.max_deceleration = -2 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -47,7 +48,7 @@ class Car:
             self.car_image.fill((255, 0, 0))
 
         
-        self.min_detection_range_normal = REAL_CAR_LENGTH*2
+        self.min_detection_range_normal = REAL_CAR_LENGTH
         self.detection_angle_threshold_normal = 70
         
         self.min_detection_range = self.min_detection_range_normal
@@ -63,15 +64,18 @@ class Car:
         self.current_target_position = self.get_next_target_position()
         self.current_target_index = 0
 
-        self.intersection_delta = 0
-        self.target_delta = -2.5
+        self.target_delta = -2
+        
+        self.intersection_slowing_range = 20
+        self.intersection_slowing_part_max_speed = 3
+        self.intersection_checking_range = 6
 
         self.can_enter_intersection = False
 
         self.distance_to_intersection = math.inf
         self.distance_on_exit_road = math.inf
 
-        self.critical_distance = math.sqrt((REAL_CAR_WIDTH/2)**2 + (REAL_CAR_LENGTH/2)**2)*2
+        self.critical_distance = math.sqrt((REAL_CAR_WIDTH/2)**2 + (REAL_CAR_LENGTH/2)**2)*2.25
 
         
 
@@ -120,7 +124,10 @@ class Car:
     def move(self, dt):
         self.update_reaction_time(dt)
 
-        self.detection_range = max(self.min_detection_range, (self.speed*3.6)/2 + 1)
+        # La formule est simple. Prenez le chiffre des dizaines (5 pour 50 km/h) et multipliez-le par 3 (5 x 3 = 15). Puis, multipliez ce résultat par 2 (15 x 2 = 30). Vous obtenez la distance approximative à maintenir entre vous et le véhicule de devant (pour l’exemple 30 mètres). Facile non !?
+
+
+        self.detection_range = max(self.min_detection_range, (self.speed*3.6)/2) + REAL_CAR_LENGTH
 
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
@@ -188,14 +195,10 @@ class Car:
 
             if self.status == "APPROACHING" and self.current_target_extremity.intersection:     # Approaching intersection
                 # Calculate distance to intersection
-                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=self.intersection_delta)[0] - self.pos).length()
+                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=0)[0] - self.pos).length()
                 
-                # If the car is already within the intersection's detection range, set distance to infinity
-                if self.distance_to_intersection > self.detection_range/2:
-                    self.distance_to_intersection = math.inf
-                
-                # Check if the car has reached the target
-                if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < 4: 
+                # Check if the car is within the slowing range to start checking if it can enter the intersection
+                if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < self.intersection_checking_range: 
                     # If the car has reached the target, check if it can enter the intersection
                     if self.can_enter_intersection:
                         # If it can enter the intersection, set the distance to infinity
@@ -207,6 +210,7 @@ class Car:
                             self.distance_to_intersection = math.inf
                             self.can_enter_intersection = True
 
+
             d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
@@ -216,17 +220,18 @@ class Car:
             # Determine max_speed based on context (intersection or straight road)
             current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
 
-            if d < self.detection_range:    # brake
-                new_acceleration = -self.alpha * (1-(d/self.detection_range))
-            else:
-                new_acceleration = self.beta * (1- self.speed/current_max_speed)
-            ### make sure acceleration shift is not too important, if it is clamp
-            if new_acceleration > self.acceleration:
-                self.acceleration = min(new_acceleration, self.acceleration + self.max_acceleration)
-            elif new_acceleration < self.acceleration:
-                self.acceleration = max(new_acceleration, self.acceleration + self.max_deceleration)
-            else:
-                self.acceleration = new_acceleration
+
+            # If the car is approaching an intersection, slow down enough to enter the intersection
+            self.target_speed = current_max_speed
+            if self.status == "APPROACHING":
+                detection_range = self.intersection_slowing_range + REAL_CAR_LENGTH/2
+                if self.distance_to_intersection < detection_range:
+                    # The car should slow down to the intersection slowing part max speed
+                    self.target_speed = self.intersection_slowing_part_max_speed
+                    
+
+            self.acceleration = self.max_acceleration*(1 - (self.speed/self.target_speed)**2 - (self.detection_range/d)**2)
+
             
             self.acceleration_queue.append(self.acceleration)
 

@@ -10,7 +10,7 @@ class Intersection:
         self.simulator = Simulator.get_instance()
         self.exists = []
 
-        self.min_detection_range = REAL_CAR_LENGTH * 2.5
+        self.min_detection_range = REAL_CAR_LENGTH
         self.detection_angle_threshold = 50
         
 
@@ -38,7 +38,7 @@ class ClassicRoundabout(Intersection):
         self.center = Vec2(pos)
         self.nb_lanes = 1
 
-        self.min_detection_range = REAL_CAR_LENGTH * 2.5
+        self.min_detection_range = REAL_CAR_LENGTH*1.5
         self.detection_angle_threshold = 50
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.

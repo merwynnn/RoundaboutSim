@@ -283,7 +283,7 @@ class Simulator:
             f"Status: {car.status}",
             f"Speed: {car.speed:.2f}",
             f"Acceleration: {car.acceleration:.3f}",
-            f"Max Speed: {car.max_speed}",
+            f"Target Speed: {car.target_speed:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
             f"Dist Exit: {car.distance_on_exit_road}",
             f"Num Cars: {len(self.cars)}",
