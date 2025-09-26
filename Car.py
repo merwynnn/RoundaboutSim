@@ -18,20 +18,23 @@ class Car:
         self.selected = False # Add selected attribute
 
         self.speed = 0
-        self.target_speed = 0
         self.max_speed = 13.8889 # Vitesse maximale autorisée
-        self.max_intersection_speed = 8.33333
         self.acceleration = 0
+        self.max_intersection_speed = 8.33333
+
+        # model parameters
+        self.target_speed = 0       # Automaticaly set
+        self.max_acceleration = 1.4
+        self.desired_acceleration = 2
+        self.jam_distance = 2
+        self.safe_time_gap = 1.5
+        
+        self.max_deceleration = -2 # Increased max_deceleration for quicker stops
         
         self.reaction_time_ms = REACTION_TIME 
         self.acceleration_queue = deque([0] * int(self.reaction_time_ms), maxlen=int(self.reaction_time_ms))
 
         self.steering_speed = 40
-
-        self.alpha = 15 # Increased alpha for stronger obstacle avoidance response
-        self.beta = 0.375
-        self.max_acceleration = 2
-        self.max_deceleration = -2 # Increased max_deceleration for quicker stops
 
         # Extremities
         self.last_extremity = path[0]
@@ -229,8 +232,12 @@ class Car:
                     # The car should slow down to the intersection slowing part max speed
                     self.target_speed = self.intersection_slowing_part_max_speed
                     
+            leading_car_speed = 0
+            if obstacle:
+                leading_car_speed = obstacle.speed
+            desired_distance = self.jam_distance + self.speed*self.safe_time_gap + self.speed*(abs(leading_car_speed-self.speed))/(2*math.sqrt(self.max_acceleration*self.desired_acceleration))
 
-            self.acceleration = self.max_acceleration*(1 - (self.speed/self.target_speed)**2 - (self.detection_range/d)**2)
+            self.acceleration = self.max_acceleration*(1 - (self.speed/self.target_speed)**4 - (desired_distance/d)**2)
 
             
             self.acceleration_queue.append(self.acceleration)
