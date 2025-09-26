@@ -10,8 +10,9 @@ class Intersection:
         self.simulator = Simulator.get_instance()
         self.exists = []
 
-        self.min_detection_range = REAL_CAR_LENGTH
+        self.min_detection_range = REAL_CAR_LENGTH*1.5
         self.detection_angle_threshold = 50
+        self.detection_rotation_angle = 0
         
 
     def update(self, dt):
@@ -37,9 +38,7 @@ class ClassicRoundabout(Intersection):
         self.radius = radius
         self.center = Vec2(pos)
         self.nb_lanes = 1
-
-        self.min_detection_range = REAL_CAR_LENGTH*1.5
-        self.detection_angle_threshold = 50
+        
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
         self.nb_target_to_check_before_enter = 7
@@ -139,7 +138,7 @@ class ClassicRoundabout(Intersection):
         return True
 
 class RedLightIntersection(Intersection):
-    def __init__(self, pos, exits_dir, light_duration=10, yellow_light_duration=3, size=LANE_WIDTH*6):
+    def __init__(self, pos, exits_dir, light_duration=30, yellow_light_duration=3, size=LANE_WIDTH*6):
         super().__init__(pos)
         self.size = size
         self.exits_dir = exits_dir
@@ -156,7 +155,8 @@ class RedLightIntersection(Intersection):
         self.current_green_pair = (tuple(self.exits_dir[2]), tuple(self.exits_dir[3]))  # N-S green initially
 
         self.min_detection_range = REAL_CAR_LENGTH * 2
-        self.detection_angle_threshold = 70
+        self.detection_angle_threshold = 50
+        self.detection_rotation_angle = 40
 
     def update(self, dt):
         self.timer += dt
@@ -240,29 +240,49 @@ class RedLightIntersection(Intersection):
             pygame.draw.circle(win, color, transformed_light_pos, light_radius)
 
     def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
-        """current_target_index is the index of the target to reach (starting from 0)"""
+        """Renvoie la position suivante sur une trajectoire lissée (courbes de Bézier)."""
 
         start_pos, start_dir = start_extremity.get_other_extremity().get_end_car_pos_dir()
         end_pos, end_dir = exit_extremity.get_start_car_pos_dir()
 
-        dot_product = start_dir.dot(end_dir)
+        # Produit vectoriel pour déterminer gauche/droite
         cross_product = start_dir.cross(end_dir)
 
-        # Straight
-        if cross_product == 0:
-            return end_pos, True
-        
-        # Right turn
-        elif cross_product > 0.9:
-            control_point = start_pos + start_dir * self.size * 0.3
-            path = [start_pos, control_point, end_pos]
-        # Left turn
-        else:
-            control_point1 = start_pos + start_dir * self.size * 0.4
-            path = [start_pos, control_point1, self.pos, end_pos]
+        # Nombre de points d'échantillonnage (plus = plus lisse)
+        resolution = 20
 
+        # --- Définition des points de contrôle ---
+        if abs(cross_product) < 0.1:
+            # Tout droit → ligne simple
+            control_points = [start_pos, start_pos + start_dir * (self.size * 0.5),
+                            end_pos - end_dir * (self.size * 0.5), end_pos]
+
+        elif cross_product > 0:
+            # Tourner à droite → courbe serrée
+            control_points = [start_pos,
+                            start_pos + start_dir * (self.size * 0.3),
+                            end_pos - end_dir * (self.size * 0.3),
+                            end_pos]
+
+        else:
+            # Tourner à gauche → grande courbe passant par le centre
+            control_points = [start_pos,
+                            start_pos + start_dir * (self.size * 0.4),
+                            self.pos,  # centre intersection
+                            end_pos]
+
+        # --- Fonction Bézier cubique ---
+        def bezier(t, pts):
+            return (pts[0] * (1 - t)**3 +
+                    pts[1] * 3 * (1 - t)**2 * t +
+                    pts[2] * 3 * (1 - t) * t**2 +
+                    pts[3] * t**3)
+
+        # Génération des points de trajectoire
+        path = [bezier(t / (resolution - 1), control_points) for t in range(resolution)]
+
+        # --- Retour du point courant ---
         is_last_pos = current_target_index >= len(path) - 1
-        
         if is_last_pos:
             return end_pos, True
         else:

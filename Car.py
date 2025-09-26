@@ -53,10 +53,12 @@ class Car:
         
         self.min_detection_range_normal = REAL_CAR_LENGTH
         self.detection_angle_threshold_normal = 70
+        self.detection_rotation_angle_normal = 0
         
         self.min_detection_range = self.min_detection_range_normal
         self.detection_range = self.min_detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
+        self.detection_rotation_angle = self.detection_rotation_angle_normal
         
         # Targets
         self.status = "EXITING"
@@ -67,7 +69,7 @@ class Car:
         self.current_target_position = self.get_next_target_position()
         self.current_target_index = 0
 
-        self.target_delta = -2
+        self.target_delta = 0
         
         self.intersection_slowing_range = 20
         self.intersection_slowing_part_max_speed = 3
@@ -100,7 +102,7 @@ class Car:
 
                 if vector_to_other.length_squared() > 1e-6: 
                     try:
-                        angle = self.dir.angle_to(vector_to_other)
+                        angle = self.dir.angle_to(vector_to_other) - self.detection_rotation_angle
                         angle = (angle + 180) % 360 - 180
                         if abs(angle) < self.detection_angle_threshold:
  
@@ -129,8 +131,11 @@ class Car:
 
         # La formule est simple. Prenez le chiffre des dizaines (5 pour 50 km/h) et multipliez-le par 3 (5 x 3 = 15). Puis, multipliez ce résultat par 2 (15 x 2 = 30). Vous obtenez la distance approximative à maintenir entre vous et le véhicule de devant (pour l’exemple 30 mètres). Facile non !?
 
-
-        self.detection_range = max(self.min_detection_range, (self.speed*3.6)/2) + REAL_CAR_LENGTH
+        """speed_km_h = self.speed * 3.6
+        tens_digit = int(speed_km_h // 10)
+        self.detection_range = max(self.min_detection_range, tens_digit * 3 * 2) + REAL_CAR_LENGTH"""
+        
+        self.detection_range = max(self.min_detection_range, self.speed*2) + REAL_CAR_LENGTH
 
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
@@ -198,9 +203,9 @@ class Car:
 
             if self.status == "APPROACHING" and self.current_target_extremity.intersection:     # Approaching intersection
                 # Calculate distance to intersection
-                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=0)[0] - self.pos).length()
+                self.distance_to_intersection = (self.last_extremity.get_end_car_pos_dir(delta=3)[0] - self.pos).length()
                 
-                # Check if the car is within the slowing range to start checking if it can enter the intersection
+                # Check if the car is within the checking range to start checking if it can enter the intersection
                 if (self.last_extremity.get_end_car_pos_dir(delta=self.target_delta)[0]-self.pos).length() < self.intersection_checking_range: 
                     # If the car has reached the target, check if it can enter the intersection
                     if self.can_enter_intersection:
@@ -218,7 +223,7 @@ class Car:
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
                 self.speed = 0
-                return
+                return  
 
             # Determine max_speed based on context (intersection or straight road)
             current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
@@ -292,6 +297,7 @@ class Car:
                         
             self.min_detection_range = self.last_extremity.intersection.min_detection_range
             self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
+            self.detection_rotation_angle = self.last_extremity.intersection.detection_rotation_angle
             
 
 
@@ -306,6 +312,8 @@ class Car:
 
             self.min_detection_range = self.min_detection_range_normal
             self.detection_angle_threshold = self.detection_angle_threshold_normal
+            self.detection_rotation_angle = self.detection_rotation_angle_normal
+
 
             return self.last_extremity.get_end_car_pos_dir()[0]
         
@@ -318,8 +326,8 @@ class Car:
 
     def draw_rect(self, win):
         # Car rectangle scaling
-        rect_width = self.simulator.camera.get_scaled_value(self.car_width*0.4)
-        rect_height = self.simulator.camera.get_scaled_value(self.car_height*0.7)
+        rect_width = self.simulator.camera.get_scaled_value(REAL_CAR_WIDTH)
+        rect_height = self.simulator.camera.get_scaled_value(REAL_CAR_LENGTH)
         if rect_width < 1: rect_width = 1
         if rect_height < 1: rect_height = 1
 
@@ -358,7 +366,7 @@ class Car:
         temp_scaled_image = pygame.transform.scale(self.car_image, (scaled_car_size, scaled_car_size))
 
         # Rotate
-        angle_degrees = self.dir.angle_to(Vec2(1, 0))
+        angle_degrees = self.dir.angle_to(Vec2(1, 0)) 
         rotated_image = pygame.transform.rotate(temp_scaled_image, angle_degrees-90)
 
         # Apply camera transformation to the car's center position
@@ -416,8 +424,9 @@ class Car:
             # world_start_point uses self.car_height (world unit)
             world_start_point = self.pos
             transformed_start_point = self.simulator.camera.apply(world_start_point)
-
+    
             if self.dir.length_squared() > 0:
+                angle_degrees += - self.detection_rotation_angle
                 # world_p1/p2 use self.detection_range (world unit)
                 world_p1 = world_start_point + Vec2(self.detection_range, 0).rotate(-self.detection_angle_threshold - angle_degrees)
                 world_p2 = world_start_point + Vec2(self.detection_range, 0).rotate(self.detection_angle_threshold - angle_degrees)

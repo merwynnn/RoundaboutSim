@@ -111,7 +111,7 @@ class Simulator:
 
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None,config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
-        
+        print("init")
         self.total_ticks = 0
         self.car_lifetimes = []
 
@@ -145,7 +145,7 @@ class Simulator:
              self.all_extremities.add(road.start_extremity)
              self.all_extremities.add(road.end_extremity)
 
-        self.camera.position = self.intersections[0].pos if self.intersections else self.roads[0].start_extremity.pos if self.roads else Vec2(0, 0)
+        self.camera.position = Vec2(self.intersections[0].pos if self.intersections else self.roads[0].start_extremity.pos if self.roads else Vec2(0, 0))
 
         self._neighbor_map = None
 
@@ -281,9 +281,9 @@ class Simulator:
         car = self.selected_car
         debug_info = [
             f"Status: {car.status}",
-            f"Speed: {car.speed:.2f}",
+            f"Speed: {car.speed*3.6:.2f}",
             f"Acceleration: {car.acceleration:.3f}",
-            f"Target Speed: {car.target_speed:.2f}",
+            f"Target Speed: {car.target_speed*3.6:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
             f"Dist Exit: {car.distance_on_exit_road}",
             f"Num Cars: {len(self.cars)}",
@@ -315,7 +315,7 @@ class Simulator:
             f"Car Density: {self.get_car_density()}",
             f"Mean Car Density: {self.get_mean_car_density():.2f}",
             f"Mean Exit Flow Rate: {mean_exit_flow_rate}",
-            f"Max Exit Flow Rate: {max(self.exit_flow_rate_history) if self.exit_flow_rate_history else 0:.3f}",
+            f"Total time: {self.total_ticks*0.1:.1f}s",
         ]
 
         debug_rect_width = 300
