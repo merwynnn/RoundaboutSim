@@ -1,3 +1,4 @@
+from typing import List, Optional, Tuple
 import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
@@ -82,7 +83,80 @@ class Car:
 
         self.critical_distance = math.sqrt((REAL_CAR_WIDTH/2)**2 + (REAL_CAR_LENGTH/2)**2)*2.25
 
-        
+        self.v_ema = 0
+
+        # état courant et timestamp du dernier changement d'état
+        self.state = FREE
+        self.state_time = 0.0    # temps passé dans l'état courant (s)
+
+    def update_ema(self, dt: float = DT, tau: float = TAU):
+        """ Mise à jour discrète de l'EMA (équation différentielle). """
+        # Euler explicite stable si dt << tau
+        self.v_ema += (self.v - self.v_ema) * (dt / tau)
+
+    def detect_state(self,
+                     bottleneck_intervals: Optional[List[Tuple[float, float]]] = None,
+                     v_free: float = V_FREE,
+                     v_cong: float = V_CONG,
+                     dv_up: float = DV_UP,
+                     dv_down: float = DV_DOWN,
+                     dt: float = DT,
+                     t_min_state: float = T_MIN_STATE):
+        """
+        Détecte et met à jour l'état du véhicule en utilisant v et v_ema.
+        bottleneck_intervals : liste de couples (x_begin, x_end) en mètres.
+        """
+        # 1) Calcul des flags locaux (bool)
+        is_free = (self.v_ema > v_free)
+        is_jam = (self.v_ema < v_cong)
+        dv_now = self.v - self.v_ema
+        is_up = (dv_now < -dv_up)
+        is_down = (dv_now > dv_down)
+
+        # 2) Bottleneck spatial (si fourni)
+        in_bottleneck = False
+        if bottleneck_intervals:
+            for xb, xe in bottleneck_intervals:
+                if xb < self.x < xe:
+                    in_bottleneck = True
+                    break
+
+        # 3) Construire liste d'états candidats (vrais)
+        candidates = []
+        if is_down: candidates.append(DOWN)
+        if in_bottleneck: candidates.append(BOTTLENECK)
+        if is_jam: candidates.append(JAM)
+        if is_up: candidates.append(UP)
+        if is_free: candidates.append(FREE)
+
+        # 4) Choix selon priorité
+        new_state = None
+        for s in PRIORITY:
+            if s in candidates:
+                new_state = s
+                break
+
+        # Si aucun critère n'est vrai, garder l'état courant (pas de changement)
+        if new_state is None:
+            new_state = self.state
+
+        # 5) Hysteresis / dwell time : n'accepter changement d'état
+        # que si on est resté T_MIN_STATE dans l'état courant, sauf si changement to DOWN
+        # (on peut décider que DOWN est prioritaire et immédiat — ici on applique dwell sauf pour DOWN)
+        if new_state != self.state:
+            # autoriser le passage vers DOWN immédiatement (priorité de sécurité)
+            if new_state == DOWN:
+                accept = True
+            else:
+                accept = (self.state_time >= t_min_state)
+            if accept:
+                self.state = new_state
+                self.state_time = 0.0  # reset timer
+            else:
+                # garder ancien état, incrémenter timer plus bas (voir update_state)
+                pass
+
+        # si pas de changement accepté, on garde l'état et on accumule time elsewhere
 
 
     def check_front(self):

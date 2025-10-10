@@ -31,3 +31,22 @@ def to_pixel(value):
 
 def to_world(value):
     return value / PIXEL_PER_METER
+
+
+# --- Paramètres globaux ---
+TAU = 5.0                # s, constante EMA
+DT = 0.1                 # s, pas de simulation
+V_FREE = 60.0 / 3.6      # m/s
+V_CONG = 40.0 / 3.6      # m/s
+DV_UP = 10.0 / 3.6       # m/s
+DV_DOWN = 10.0 / 3.6     # m/s
+T_MIN_STATE = 2.0        # s, durée minimale dans un état pour éviter "chattering"
+
+# états possibles
+FREE = "FREE"
+UP = "UPSTREAM_FRONT"    # approche d'un bouchon (front amont)
+JAM = "CONGESTED"
+BOTTLENECK = "BOTTLENECK"
+DOWN = "DOWNSTREAM_FRONT"
+
+PRIORITY = [DOWN, BOTTLENECK, JAM, UP, FREE]
