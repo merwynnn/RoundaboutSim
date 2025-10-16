@@ -32,8 +32,6 @@ class Car:
         
         self.max_deceleration = -2 # Increased max_deceleration for quicker stops
         
-        self.reaction_time_ms = REACTION_TIME 
-        self.acceleration_queue = deque([0] * int(self.reaction_time_ms), maxlen=int(self.reaction_time_ms))
 
         self.steering_speed = 40
 
@@ -92,10 +90,9 @@ class Car:
     def update_ema(self, dt: float = DT, tau: float = TAU):
         """ Mise à jour discrète de l'EMA (équation différentielle). """
         # Euler explicite stable si dt << tau
-        self.v_ema += (self.v - self.v_ema) * (dt / tau)
+        self.v_ema += (self.speed - self.v_ema) * (dt / tau)
 
     def detect_state(self,
-                     bottleneck_intervals: Optional[List[Tuple[float, float]]] = None,
                      v_free: float = V_FREE,
                      v_cong: float = V_CONG,
                      dv_up: float = DV_UP,
@@ -106,20 +103,19 @@ class Car:
         Détecte et met à jour l'état du véhicule en utilisant v et v_ema.
         bottleneck_intervals : liste de couples (x_begin, x_end) en mètres.
         """
+
+        self.state_time += dt
         # 1) Calcul des flags locaux (bool)
         is_free = (self.v_ema > v_free)
         is_jam = (self.v_ema < v_cong)
-        dv_now = self.v - self.v_ema
+        dv_now = self.speed - self.v_ema
         is_up = (dv_now < -dv_up)
         is_down = (dv_now > dv_down)
 
         # 2) Bottleneck spatial (si fourni)
         in_bottleneck = False
-        if bottleneck_intervals:
-            for xb, xe in bottleneck_intervals:
-                if xb < self.x < xe:
-                    in_bottleneck = True
-                    break
+        ##if self.status == "APPROACHING":
+        ##    in_bottleneck = True
 
         # 3) Construire liste d'états candidats (vrais)
         candidates = []
@@ -135,6 +131,7 @@ class Car:
             if s in candidates:
                 new_state = s
                 break
+    
 
         # Si aucun critère n'est vrai, garder l'état courant (pas de changement)
         if new_state is None:
@@ -149,12 +146,12 @@ class Car:
                 accept = True
             else:
                 accept = (self.state_time >= t_min_state)
-            if accept:
-                self.state = new_state
-                self.state_time = 0.0  # reset timer
-            else:
-                # garder ancien état, incrémenter timer plus bas (voir update_state)
-                pass
+                if accept:
+                    self.state = new_state
+                    self.state_time = 0.0  # reset timer
+                else:
+                    # garder ancien état, incrémenter timer plus bas (voir update_state)
+                    pass
 
         # si pas de changement accepté, on garde l'état et on accumule time elsewhere
 
@@ -190,25 +187,19 @@ class Car:
 
         return closest_car_distance, car
 
-    def update_reaction_time(self, dt):
-        if dt > 0:
-            new_maxlen = int(self.reaction_time_ms / dt)
-            if new_maxlen != self.acceleration_queue.maxlen:
-                new_queue = deque([0] * new_maxlen, maxlen=new_maxlen)
-                # Keep the most recent values
-                for i in range(min(len(self.acceleration_queue), new_maxlen)):
-                    new_queue.append(self.acceleration_queue.pop())
-                self.acceleration_queue = new_queue
 
     def move(self, dt):
-        self.update_reaction_time(dt)
-
         # La formule est simple. Prenez le chiffre des dizaines (5 pour 50 km/h) et multipliez-le par 3 (5 x 3 = 15). Puis, multipliez ce résultat par 2 (15 x 2 = 30). Vous obtenez la distance approximative à maintenir entre vous et le véhicule de devant (pour l’exemple 30 mètres). Facile non !?
 
         """speed_km_h = self.speed * 3.6
         tens_digit = int(speed_km_h // 10)
         self.detection_range = max(self.min_detection_range, tens_digit * 3 * 2) + REAL_CAR_LENGTH"""
         
+        self.update_ema(dt=dt)
+
+        old_state = self.state
+        self.detect_state(dt=dt)
+
         self.detection_range = max(self.min_detection_range, self.speed*2) + REAL_CAR_LENGTH
 
         if self.current_target_position:
@@ -319,7 +310,6 @@ class Car:
             self.acceleration = self.max_acceleration*(1 - (self.speed/self.target_speed)**4 - (desired_distance/d)**2)
 
             
-            self.acceleration_queue.append(self.acceleration)
 
         else:  # No current target position -> stop the car
             self.acceleration = -self.alpha
@@ -329,7 +319,6 @@ class Car:
         # --- Mise à jour de la position ---
         dv = self.acceleration * dt
         self.speed += dv
-        #self.speed += self.acceleration_queue[0] * dt
 
         # max_speed was already determined above for the acceleration calculation
         self.speed = max(0, min(self.speed, current_max_speed))

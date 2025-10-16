@@ -22,6 +22,8 @@ simulator = Simulator(win)
 
 car_flow_rate = 120
 
+PAUSE = False
+
 def create_grid_setup(n, m):
     RoadExtremity.next_id = 0
     intersections = []
@@ -117,7 +119,7 @@ tick = 0
 
 while True:
     tick+=1
-    if tick % 1000 == 0:
+    if tick % 10000 == 0:
         print(f"  ... tick {tick}")
     dt = DT * time_multiplier
     events = pygame.event.get()
@@ -144,6 +146,8 @@ while True:
             pygame.quit()
             sys.exit()
         if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_SPACE:
+                PAUSE = not PAUSE
             if event.key == pygame.K_RIGHT:
                 if time_multiplier == 1:
                     time_multiplier = 2
@@ -160,6 +164,8 @@ while True:
                 intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)
                 simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.05)
                 tick = 0
+    if PAUSE:
+        continue
 
     if simulator:
         simulator.update(dt, events)

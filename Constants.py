@@ -2,7 +2,7 @@
 import pygame
 
 
-WIDTH, HEIGHT = 1400, 1000
+WIDTH, HEIGHT = 1000, 800
 BACKGROUND_COLOR = (0, 150, 0)
 ROAD_COLOR = (113, 112, 113)
 LANE_WIDTH = 3.125
@@ -20,8 +20,6 @@ DT = 0.1  # seconds per simulation step
 
 DEBUG = False
 
-REACTION_TIME = 400
-
 pygame.font.init()
 font = pygame.font.Font(None, 24)
 font_medium = pygame.font.Font(None, 32)
@@ -34,13 +32,13 @@ def to_world(value):
 
 
 # --- Paramètres globaux ---
-TAU = 5.0                # s, constante EMA
+TAU = 0.3              # s, constante EMA
 DT = 0.1                 # s, pas de simulation
-V_FREE = 60.0 / 3.6      # m/s
-V_CONG = 40.0 / 3.6      # m/s
-DV_UP = 10.0 / 3.6       # m/s
-DV_DOWN = 10.0 / 3.6     # m/s
-T_MIN_STATE = 2.0        # s, durée minimale dans un état pour éviter "chattering"
+V_FREE = 20.0 / 3.6      # m/s, trafic libre
+V_CONG = 18.0 / 3.6      # m/s, trafic congestionné
+DV_UP = 10.0 / 3.6       # m/s, seuil de variation pour front amont du trafic (ralentissement)
+DV_DOWN = 10.0 / 3.6     # m/s, seuil de variation pour front aval du trafic (accélération)
+T_MIN_STATE = 0.1        # s, durée minimale dans un état pour éviter "chattering"
 
 # états possibles
 FREE = "FREE"

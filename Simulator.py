@@ -281,12 +281,12 @@ class Simulator:
         car = self.selected_car
         debug_info = [
             f"Status: {car.status}",
+            f"State: {car.state}",
+            f"v_ema: {car.v_ema*3.6:.2f}",
             f"Speed: {car.speed*3.6:.2f}",
             f"Acceleration: {car.acceleration:.3f}",
             f"Target Speed: {car.target_speed*3.6:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
-            f"Dist Exit: {car.distance_on_exit_road}",
-            f"Num Cars: {len(self.cars)}",
             f"Can Enter: {car.can_enter_intersection}",
         ]
         if car.current_target_extremity.intersection:
