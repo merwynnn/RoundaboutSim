@@ -356,13 +356,11 @@ class Car:
             next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(self.last_extremity, self.current_target_extremity, self.current_target_index, car=self)
             self.current_target_index += 1
             self.status = "INTERSECTION"
-
                         
             self.min_detection_range = self.last_extremity.intersection.min_detection_range
             self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
             self.detection_rotation_angle = self.last_extremity.intersection.detection_rotation_angle
             
-
 
 
             return next_target_pos

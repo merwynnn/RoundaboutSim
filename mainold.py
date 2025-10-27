@@ -31,7 +31,7 @@ def create_grid_setup(n, m):
     road_extremity_spawners = []
 
     fixed_road_length = 80
-    roundabout_radius = 17.5
+    roundabout_radius = ROUNDABOUT_RADIUS
     # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
@@ -119,8 +119,6 @@ tick = 0
 
 while True:
     tick+=1
-    if tick % 10000 == 0:
-        print(f"  ... tick {tick}")
     dt = DT * time_multiplier
     events = pygame.event.get()
     for event in events:
@@ -161,8 +159,20 @@ while True:
             elif event.key == pygame.K_1:
                 n_rows = 2
                 m_cols = 2
-                intersections_3, roads_3, road_extremity_spawners_3 = create_grid_setup(n_rows, m_cols)
-                simulator.initialize(intersections_3, roads_3, road_extremity_spawners_3, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.05)
+                intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols)
+                simulator.initialize(intersections, roads, road_extremity_spawners, config_file='configs/flow_config_1.xlsx', spawn_intervall_multiplier=0.05)
+                tick = 0
+            elif event.key == pygame.K_2:
+                n_rows = 1
+                m_cols = 1
+                intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols)
+                simulator.initialize(intersections, roads, road_extremity_spawners, spawn_intervall_multiplier=0.05)
+                tick = 0
+            elif event.key == pygame.K_3:
+                intersections = [ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])]
+                roads = []
+                road_extremity_spawners = []
+                simulator.initialize(intersections, roads, road_extremity_spawners, spawn_intervall_multiplier=0.05)
                 tick = 0
     if PAUSE:
         continue

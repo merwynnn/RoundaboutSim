@@ -13,6 +13,8 @@ BASE_CAR_WIDTH = 20  # Base width for car images at zoom level 1.0
 REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 
+ROUNDABOUT_RADIUS = 17.5  # in meters
+
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
