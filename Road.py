@@ -34,7 +34,6 @@ class RoadExtremity:
         if self.spawn_cars:
             self.timer += dt
             if self.timer >= self.spawn_cars_timer:
-                print("spawn car at extremity ", self.id, "spawn_cars_timer=", self.spawn_cars_timer)
                 # if self.simulator: # Removed as using singleton
                 from Simulator import Simulator
                 if self.last_spawned_car:

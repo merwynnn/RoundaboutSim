@@ -31,7 +31,7 @@ def create_grid_setup(n, m):
     road_extremity_spawners = []
 
     fixed_road_length = 80
-    roundabout_radius = ROUNDABOUT_RADIUS
+    roundabout_radius = ROUNDABOUT_RADIUS*5
     # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
@@ -133,10 +133,7 @@ while True:
             plt.ylabel("Flow Rate")
 
             plt.subplot(1, 2, 2)
-            plt.plot(simulator.car_density_history)
-            plt.title("Car Density vs. Time")
-            plt.xlabel("Time (ticks)")
-            plt.ylabel("Car Density")
+            simulator.cars[0].S(plot=True)
 
             plt.tight_layout()
             plt.show()
@@ -166,13 +163,14 @@ while True:
                 n_rows = 1
                 m_cols = 1
                 intersections, roads, road_extremity_spawners = create_grid_setup(n_rows, m_cols)
-                simulator.initialize(intersections, roads, road_extremity_spawners, spawn_intervall_multiplier=0.05)
+                simulator.initialize(intersections, roads, road_extremity_spawners, spawn_intervall_multiplier=0.005)
                 tick = 0
             elif event.key == pygame.K_3:
-                intersections = [ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])]
+                intersections = [ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS*5, [])]
                 roads = []
                 road_extremity_spawners = []
                 simulator.initialize(intersections, roads, road_extremity_spawners, spawn_intervall_multiplier=0.05)
+                intersections[0].spawn_evenly_spaced_cars(30)
                 tick = 0
     if PAUSE:
         continue

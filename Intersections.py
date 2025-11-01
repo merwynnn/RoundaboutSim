@@ -41,7 +41,7 @@ class ClassicRoundabout(Intersection):
         
 
         # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
-        self.nb_target_to_check_before_enter = 7
+        self.nb_target_to_check_before_enter = 4
 
         self.speed_enter_threshold = 1.0 # m/s, cars moving slower than this are considered "slow" when checking if a car can enter the roundabout
 
@@ -50,7 +50,7 @@ class ClassicRoundabout(Intersection):
             self.exits.append(RoadExtremity((self.center.x + self.radius * exit_dir.x, self.center.y + self.radius * exit_dir.y), self))
 
         # Increased number of points from 14 to 20 for a smoother path around the roundabout.
-        self.targets = self.get_evenly_spaced_points(20)[::-1]
+        self.targets = self.get_evenly_spaced_points(60)[::-1]
 
         self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
 
@@ -136,6 +136,17 @@ class ClassicRoundabout(Intersection):
                         return False 
                     
         return True
+    
+    def spawn_evenly_spaced_cars(self, n_cars):
+        positions = self.get_evenly_spaced_points(n_cars)
+        for i, pos in enumerate(positions):
+            angle = (2 * math.pi / n_cars) * i
+            car_dir = Vec2(-math.sin(angle), math.cos(angle))  # Tangential direction
+            print(pos)
+            index = self.get_index(self.closest_target(pos))
+            self.simulator.spawn_car_at_position(pos, car_dir, intersection=self, target_position=self.targets[index], target_index = index)
+
+
 
 class RedLightIntersection(Intersection):
     def __init__(self, pos, exits_dir, light_duration=30, yellow_light_duration=3, size=LANE_WIDTH*6):

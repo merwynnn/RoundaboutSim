@@ -12,6 +12,7 @@ BASE_CAR_LENGTH = 35 # Base size for car images at zoom level 1.0
 BASE_CAR_WIDTH = 20  # Base width for car images at zoom level 1.0
 REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
+CAR_WEIGHT = 1500  # in kg
 
 ROUNDABOUT_RADIUS = 17.5  # in meters
 

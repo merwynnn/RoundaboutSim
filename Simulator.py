@@ -72,6 +72,9 @@ class Simulator:
         self.car_density_history = []
         self.exit_flow_rate_history = []
 
+        self.total_work = 0
+        self.total_work_complete = 0
+
     def get_average_car_lifetime(self):
         if not self.car_lifetimes:
             return 0
@@ -108,6 +111,8 @@ class Simulator:
         if not self.real_entry_flow_rate_history:
             return 0
         return sum(self.real_entry_flow_rate_history) / len(self.real_entry_flow_rate_history)
+    
+
 
 
     def initialize(self, intersections=None, roads=None, road_extremity_spawners=None,config_file='flow_config.xlsx', spawn_intervall_multiplier=1):
@@ -224,6 +229,10 @@ class Simulator:
             intersection.update(dt)
         for car in list(self.cars):
             car.move(dt)
+            self.total_work += car.work
+
+
+
         for road_extremity in self.road_extremity_spawners:
             road_extremity.update(dt)
 
@@ -288,12 +297,8 @@ class Simulator:
             f"Target Speed: {car.target_speed*3.6:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
             f"Can Enter: {car.can_enter_intersection}",
+            f"Work: {car.work:.2f}"
         ]
-        if car.current_target_extremity.intersection:
-                can_enter = car.current_target_extremity.intersection.can_car_enter(car.current_target_extremity)
-                debug_info.append(f"Can Enter Int: {can_enter}")
-        else:
-                debug_info.append(f"Can Enter Int: N/A")
 
 
         debug_rect_width = 200
@@ -395,6 +400,8 @@ class Simulator:
         if car in self.cars:
             self.total_cars_exited += 1
             self.cars_exited_tick_during_delta.append(self.total_ticks)
+            self.total_work_complete += car.work
+            print(f"Car exited.Total work completed mean: {self.total_work_complete/self.total_cars_exited:.2f}")
 
             self.cars.remove(car)
             lifetime = self.total_ticks - car.creation_tick
@@ -434,3 +441,24 @@ class Simulator:
             # print(f"Spawned car from {start_extremity.pos} to {end_extremity.pos}") # For debugging
         else:
             print(f"Warning: Could not generate path for new car from {start_extremity.pos} to {end_extremity.pos}. Car not spawned.")
+
+    def spawn_car_at_position(self, position, direction, intersection, target_position, target_index):
+        self.total_cars_spawned_count += 1
+
+
+        car_img = random.choice(self.preloaded_car_images) if self.use_gui and self.preloaded_car_images else None
+        new_car = Car([], self.total_ticks, car_img, target_position=target_position)
+        new_car.current_target_index = target_index
+
+        new_car.pos = position
+        new_car.dir = direction.normalize()
+
+        dummy_extremity = RoadExtremity(position)
+        dummy_extremity.intersection = intersection
+
+        new_car.last_extremity = dummy_extremity  # Assign to an arbitrary exit for now
+        new_car.status = "INTERSECTION"
+
+        self.cars.append(new_car)
+
+        return new_car
