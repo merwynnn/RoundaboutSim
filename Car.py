@@ -35,12 +35,12 @@ class Car:
         self.safe_time_gap = 1.5
 
                     ## Custom model
-        self.a = 1.0
-        self.b = 1.5
+        self.a = 0.4
+        self.b = 2
 
 
         self.c = 0.4
-        print(self.c/2*(-4*(self.a-self.b*self.c)**2/self.c**4)+self.b**2/(2*self.c**2))
+        print(self.c/2*(-2*(self.a-self.b*self.c/2)**2/self.c**4)+self.b**2/(2*self.c**2))
 
         self.desired_distance = 18
         
