@@ -25,7 +25,7 @@ class Car:
         self.speed = 0
         self.max_speed = 13.8889 # Vitesse maximale autorisée
         self.acceleration = 0
-        self.max_intersection_speed = 8.33333
+        self.max_intersection_speed = 13
 
         # model parameters
         self.target_speed = 0       # Automaticaly set
@@ -35,9 +35,12 @@ class Car:
         self.safe_time_gap = 1.5
 
                     ## Custom model
-        self.a = 0.4
-        self.b = 0.4
+        self.a = 1.0
+        self.b = 1.5
+
+
         self.c = 0.4
+        print(self.c/2*(-4*(self.a-self.b*self.c)**2/self.c**4)+self.b**2/(2*self.c**2))
 
         self.desired_distance = 18
         
@@ -66,9 +69,9 @@ class Car:
         self.min_detection_range_normal = REAL_CAR_LENGTH
         self.detection_angle_threshold_normal = 70
         self.detection_rotation_angle_normal = 0
+        self.detection_range = REAL_CAR_LENGTH*8
         
         self.min_detection_range = self.min_detection_range_normal
-        self.detection_range = self.min_detection_range_normal
         self.detection_angle_threshold = self.detection_angle_threshold_normal
         self.detection_rotation_angle = self.detection_rotation_angle_normal
         
@@ -231,7 +234,7 @@ class Car:
         old_state = self.state
         self.detect_state(dt=dt)
 
-        self.detection_range = REAL_CAR_LENGTH*5
+        
 
         if self.current_target_position:
             target_vector = self.current_target_position - self.pos
@@ -312,7 +315,7 @@ class Car:
                             self.can_enter_intersection = True
 
 
-            d = min(distance_to_obstacle, self.distance_to_intersection, self.distance_on_exit_road)
+            d = min(distance_to_obstacle,math.inf)#, self.distance_to_intersection, self.distance_on_exit_road)
             """if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
                 self.speed = 0
@@ -354,6 +357,7 @@ class Car:
         # --- Mise à jour de la position ---
         dv = self.acceleration * dt
         self.speed += dv
+        self.speed = max(0,self.speed)
 
         
         dpos = self.dir * self.speed * dt

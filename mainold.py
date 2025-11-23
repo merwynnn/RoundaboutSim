@@ -31,7 +31,7 @@ def create_grid_setup(n, m):
     road_extremity_spawners = []
 
     fixed_road_length = 80
-    roundabout_radius = ROUNDABOUT_RADIUS*5
+    roundabout_radius = 300
     # Spacing between the centers of adjacent roundabouts
     spacing_between_centers = fixed_road_length + 2 * roundabout_radius
 
