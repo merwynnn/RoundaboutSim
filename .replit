@@ -1,4 +1,4 @@
-entrypoint = "mainold.py"
+entrypoint = "roundaboutsim.py"
 modules = ["python-3.8:v2-20230907-3d66d15"]
 
 hidden = [".pythonlibs"]
@@ -12,3 +12,26 @@ LANG = "en_US.UTF-8"
 
 [agent]
 expertMode = true
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Roundabout Simulation"
+
+[[workflows.workflow]]
+name = "Roundabout Simulation"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "python main.py"
+
+[workflows.workflow.metadata]
+outputType = "console"
