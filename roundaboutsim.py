@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import matplotlib.pyplot as plt
+import matplotlib.patches as patches
 import sys
 
 # Parameters
@@ -45,17 +46,31 @@ colors = np.random.rand(n, 3)  # n random RGB triplets between 0 and 1
 
 # Live plot setup
 plt.ion()
-fig, ax = plt.subplots()
+fig, (ax, ax_density) = plt.subplots(1, 2, figsize=(14, 6))
+
+# Left plot: Circle with cars
 ax.set_aspect('equal')
 ax.set_xlim(-1.2, 1.2)
 ax.set_ylim(-1.2, 1.2)
-ax.set_title("Points moving on a unit circle")
+ax.set_title("Cars on Circle")
 
 circle = plt.Circle((0, 0), 1, color='lightgray', fill=False)
 ax.add_artist(circle)
 
-# Instead of a single Line2D, use a scatter for multiple colors
+# Scatter for cars
 points = ax.scatter(np.cos(X), np.sin(X), c=colors, s=50)
+
+# Right plot: Density visualization
+ax_density.set_xlim(0, 2*math.pi)
+ax_density.set_ylim(0, 5)
+ax_density.set_xlabel("Angular Position (rad)")
+ax_density.set_ylabel("Car Density")
+ax_density.set_title("Traffic Density Waves")
+
+# Create bars for density histogram
+density_bins = 36  # 36 bins = 10 degrees each
+bar_container = ax_density.bar(np.linspace(0, 2*math.pi, density_bins), 
+                               np.zeros(density_bins), width=2*math.pi/density_bins)
 
 # --- SPEEDUP PARAMETERS ---
 frame_skip = 5
@@ -63,12 +78,16 @@ pause_time = dt
 
 # Pre-draw background (for blitting)
 fig.canvas.draw()
-background = fig.canvas.copy_from_bbox(ax.bbox)
+background = fig.canvas.copy_from_bbox(fig.bbox)
 
 for t in range(T):
     # Dynamics
     Xa = a * (U - u0) + b * A @ Xv - c * (Xv - v0)
     Xv += Xa * dt
+    
+    # --- PREVENT BACKWARD MOTION ---
+    Xv = np.maximum(Xv, 0)  # Clamp velocity to non-negative values
+    
     X += Xv * dt
     U = A @ X
     U[-1] += 2 * math.pi
@@ -76,9 +95,31 @@ for t in range(T):
     # Update every few steps only
     if t % frame_skip == 0:
         fig.canvas.restore_region(background)
+        
+        # Update car positions on circle
         points.set_offsets(np.c_[np.cos(X), np.sin(X)])
         ax.draw_artist(points)
-        fig.canvas.blit(ax.bbox)
+        
+        # --- UPDATE DENSITY VISUALIZATION ---
+        # Normalize angles to [0, 2π)
+        X_normalized = X % (2 * math.pi)
+        
+        # Calculate density in each bin
+        density = np.zeros(density_bins)
+        bin_width = 2 * math.pi / density_bins
+        for angle in X_normalized:
+            bin_idx = int(angle / bin_width) % density_bins
+            density[bin_idx] += 1
+        
+        # Update bar heights
+        for i, bar in enumerate(bar_container):
+            bar.set_height(density[i])
+        
+        ax_density.draw_artist(ax_density.patches[0])  # redraw bars
+        for bar in bar_container:
+            ax_density.draw_artist(bar)
+        
+        fig.canvas.blit(fig.bbox)
         fig.canvas.flush_events()
 
     # Allow clean exit with Ctrl+C
