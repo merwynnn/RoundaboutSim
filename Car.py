@@ -70,11 +70,14 @@ class Car:
             self.car_image = pygame.Surface((40, 40))
             self.car_image.fill((255, 0, 0))
 
-        # Detection parameters - fixed
-        self.min_detection_range = REAL_CAR_LENGTH
-        self.detection_angle_threshold = 70
-        self.detection_rotation_angle = 0
+        self.min_detection_range_normal = REAL_CAR_LENGTH
+        self.detection_angle_threshold_normal = 70
+        self.detection_rotation_angle_normal = 0
         self.detection_range = REAL_CAR_LENGTH * 8
+
+        self.min_detection_range = self.min_detection_range_normal
+        self.detection_angle_threshold = self.detection_angle_threshold_normal
+        self.detection_rotation_angle = self.detection_rotation_angle_normal
 
         # Targets
         self.status = "EXITING"
