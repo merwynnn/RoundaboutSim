@@ -8,7 +8,6 @@ from Road import Road, RoadExtremity
 from Car import Car
 from Camera import Camera  # Added
 from Intersections import *
-from FlowManager import FlowManager
 from SpatialGrid import SpatialGrid
 import os
 
@@ -115,8 +114,8 @@ class Simulator:
                    intersections=None,
                    roads=None,
                    road_extremity_spawners=None,
-                   config_file='flow_config.xlsx',
-                   spawn_intervall_multiplier=1):
+                   car_spawn_interval=60,
+                   road_extremity_exits=None):
         print("init")
         self.total_ticks = 0
         self.car_lifetimes = []
@@ -124,29 +123,14 @@ class Simulator:
         self.car_density_history = []
         self.real_entry_flow_rate_history = []
 
-        self.flow_manager = FlowManager(
-            spawn_intervall_multiplier=spawn_intervall_multiplier,
-            config_file=config_file)
-
         # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
         self.roads = roads if roads is not None else []
         self.road_extremity_spawners = road_extremity_spawners if road_extremity_spawners is not None else []
-        self.spawners_by_id = {
-            spawner.id: spawner
-            for spawner in self.road_extremity_spawners
-        }
-
-        # Pass active spawner IDs to the FlowManager
-        active_spawner_ids = [
-            spawner.id for spawner in self.road_extremity_spawners
-        ]
-        self.flow_manager.set_active_spawners(active_spawner_ids)
+        self.road_extremity_exits = road_extremity_exits if road_extremity_exits is not None else []
 
         for spawner in self.road_extremity_spawners:
-            spawn_interval = self.flow_manager.get_spawn_interval(spawner.id)
-            if spawn_interval is not None:
-                spawner.spawn_cars_timer = spawn_interval
+            spawner.spawn_cars_timer = car_spawn_interval
 
         for road in self.roads:
             road.start_extremity.road = road
@@ -164,9 +148,6 @@ class Simulator:
 
         self._neighbor_map = None
 
-        # Precompute neighbor map for fast pathfinding
-        self._build_neighbor_map()
-
         self.cars = []
 
         self.initialized = True
@@ -174,41 +155,6 @@ class Simulator:
     @classmethod
     def get_instance(cls):
         return cls._instance
-
-    def _build_neighbor_map(self):
-        """
-        Precompute a mapping from each RoadExtremity to its set of neighbor RoadExtremities.
-        This should be called after roads and intersections are set up.
-        """
-        neighbor_map = dict()
-        # Collect all extremities
-        all_extremities = set()
-        for road in self.roads:
-            all_extremities.add(road.start_extremity)
-            all_extremities.add(road.end_extremity)
-        for intersection in self.intersections:
-            for exit_extremity in intersection.exits:
-                all_extremities.add(exit_extremity)
-        # Build neighbors
-        for ext in all_extremities:
-            neighbors = set()
-            # Across the road
-            if ext.road:
-                other = ext.get_other_extremity()
-                if other:
-                    neighbors.add(other)
-            # Across the intersection
-            if ext.intersection:
-                for neighbor in ext.intersection.exits:
-                    if neighbor is not ext:
-                        neighbors.add(neighbor)
-            neighbor_map[ext] = neighbors
-        self._neighbor_map = neighbor_map
-        self._all_extremities = all_extremities
-
-    def rebuild_neighbor_map(self):
-        """Public method to rebuild neighbors if roads/intersections change."""
-        self._build_neighbor_map()
 
     def update(self, dt, events):
         if not self.initialized:
@@ -299,8 +245,6 @@ class Simulator:
     def draw_debug_panel(self):
         car = self.selected_car
         debug_info = [
-            f"Status: {car.status}", f"State: {car.state}",
-            f"v_ema: {car.v_ema*3.6:.2f}", f"Speed: {car.speed*3.6:.2f}",
             f"Acceleration: {car.acceleration:.3f}",
             f"Target Speed: {car.target_speed*3.6:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
@@ -356,71 +300,13 @@ class Simulator:
                           (debug_rect_x + 10, debug_rect_y + 10 + i * 20))
 
     def generate_path(self, start_extremity, end_extremity):
-        """
-        Fast BFS using precomputed neighbor map. Finds shortest path (fewest hops) between extremities.
-        Adjusts path for intersection U-turns.
-        """
-        neighbor_map = self._neighbor_map
-        visited = set()
-        previous_nodes = dict()
-        queue = deque()
-        queue.append(start_extremity)
-        visited.add(start_extremity)
-        found = False
-        while queue:
-            current_node = queue.popleft()
-            if current_node == end_extremity:
-                found = True
-                break
-            for neighbor in neighbor_map.get(current_node, []):
-                if neighbor not in visited:
-                    visited.add(neighbor)
-                    previous_nodes[neighbor] = current_node
-                    queue.append(neighbor)
-        # Reconstruct path
-        path_nodes = []
-        current = end_extremity
-        if not found and current != start_extremity:
-            print(
-                f"Warning: Path not found from start {id(start_extremity)} to end {id(end_extremity)}"
-            )
-            return []
-        while current is not None:
-            path_nodes.append(current)
-            next_node_in_recon = previous_nodes.get(current)
-            if next_node_in_recon in path_nodes:
-                print(
-                    f"Error: Path reconstruction cycle detected near node id={id(current)}"
-                )
-                return []
-            current = next_node_in_recon
-        if not path_nodes or path_nodes[-1] != start_extremity:
-            print(
-                f"Warning: Path reconstruction failed for start {id(start_extremity)} to end {id(end_extremity)}"
-            )
-            if path_nodes and path_nodes[-1] != start_extremity:
-                print(
-                    f"  -> Path ends at {id(path_nodes[-1])} instead of {id(start_extremity)}"
-                )
-            return []
-        ordered_nodes = path_nodes[::-1]
-        # Correct Path for Intersection U-Turns (same as before)
-        final_path_corrected = []
-        if not ordered_nodes:
-            return []
-        final_path_corrected.append(ordered_nodes[0])
-        i = 0
-        while i < len(ordered_nodes) - 1:
-            prev_node = ordered_nodes[i]
-            curr_node = ordered_nodes[i + 1]
-            final_path_corrected.append(curr_node)
-            if i + 2 < len(ordered_nodes):
-                next_node = ordered_nodes[i + 2]
-                if next_node == prev_node and curr_node.intersection is not None:
-                    final_path_corrected.append(curr_node)
-                    i += 1
-            i += 1
-        return final_path_corrected
+        path = [
+            start_extremity,
+            start_extremity.get_other_extremity(),
+            end_extremity.get_other_extremity(), end_extremity
+        ]
+
+        return path
 
     def car_reached_destination(self, car):
         # Check if the car object exists in the list before attempting removal
@@ -441,24 +327,14 @@ class Simulator:
 
     def spawn_car(self, start_extremity):
         self.total_cars_spawned_count += 1
-        destination_id = self.flow_manager.get_destination(start_extremity.id)
+        print("spawn")
 
-        if destination_id is None:
-            print(
-                f"Warning: Could not determine destination for car from {start_extremity.id}. Car not spawned."
-            )
-            return
-
-        end_extremity = self.spawners_by_id.get(destination_id)
-
-        if end_extremity is None:
-            print(
-                f"Warning: Destination extremity '{destination_id}' not found. Car not spawned."
-            )
-            return
+        # Randomly select an end extremity from the list of exits
+        end_extremity = random.choice(self.road_extremity_exits)
 
         # Generate the path for the new car
         path = self.generate_path(start_extremity, end_extremity)
+        print(path)
 
         if path:  # Only spawn if a path exists
             car_img = random.choice(
