@@ -325,56 +325,49 @@ class Car:
         return self.path[0]
 
     def get_next_target_position(self):
-        if self.status == "INTERSECTION" and self.reached_last_intersection_target:
-            ## Exit intersection
-            self.reached_last_intersection_target = False
-            self.status = "EXITING"
-            self.last_extremity = self.current_target_extremity
-
-            return self.current_target_extremity.get_start_car_pos_dir(
-                delta=-0.6)[0]
-
-        elif self.status == "INTERSECTION":
-            ## is in intersection
-            self.can_enter_intersection = False
-
-            intersection = self.last_extremity.intersection
-            if self.path:
-                next_target_pos, is_last_pos = intersection.get_next_target_position(
-                    self.last_extremity,
-                    self.current_target_extremity,
-                    self.current_target_index,
-                    car=self)
-            else:
-                next_target_pos, is_last_pos = intersection.targets[
-                    intersection.get_index(self.current_target_index +
-                                           1)], False
-
-            self.current_target_index += 1
-            if is_last_pos:
-                self.reached_last_intersection_target = True
-                self.current_target_index = 0
-
-            return next_target_pos
-        elif self.status == "APPROACHING":
+        intersection = self.last_extremity.intersection if self.last_extremity else self.current_target_extremity.intersection
+        
+        if self.status == "APPROACHING":
+            # Enter the intersection
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
-            next_target_pos, is_last_pos = self.last_extremity.intersection.get_next_target_position(
+            next_target_pos, is_last_pos = intersection.get_next_target_position(
                 self.last_extremity,
                 self.current_target_extremity,
                 self.current_target_index,
                 car=self)
             self.current_target_index += 1
             self.status = "INTERSECTION"
+            self.can_enter_intersection = False
 
-            self.min_detection_range = self.last_extremity.intersection.min_detection_range
-            self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
-            self.detection_rotation_angle = self.last_extremity.intersection.detection_rotation_angle
+            self.min_detection_range = intersection.min_detection_range
+            self.detection_angle_threshold = intersection.detection_angle_threshold
+            self.detection_rotation_angle = intersection.detection_rotation_angle
+
+            return next_target_pos
+
+        elif self.status == "INTERSECTION":
+            if self.reached_last_intersection_target:
+                # Exit intersection
+                self.reached_last_intersection_target = False
+                self.status = "EXITING"
+                return self.current_target_extremity.get_start_car_pos_dir(delta=-0.6)[0]
+
+            # Continue through intersection
+            next_target_pos, is_last_pos = intersection.get_next_target_position(
+                self.last_extremity,
+                self.current_target_extremity,
+                self.current_target_index,
+                car=self)
+            self.current_target_index += 1
+            if is_last_pos:
+                self.reached_last_intersection_target = True
+                self.current_target_index = 0
 
             return next_target_pos
 
         elif self.status == "EXITING":
-            self.can_enter_intersection = False
+            # Move to next road
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             self.status = "APPROACHING"
@@ -384,17 +377,10 @@ class Car:
             self.detection_rotation_angle = self.detection_rotation_angle_normal
 
             target_pos, target_dir = self.last_extremity.get_end_car_pos_dir()
-
             self.dir = target_dir
-
             self.pos = self.last_extremity.get_start_car_pos_dir(delta=-0.6)[0]
 
             return target_pos
-
-        else:  # Entering intersection
-            self.last_extremity = self.current_target_extremity
-            self.current_target_extremity = self.get_next_target_extremity()
-            return self.get_next_target_position()
 
     def draw_rect(self, win):
         # Car rectangle scaling
