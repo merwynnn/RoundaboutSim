@@ -36,7 +36,6 @@ class RoadExtremity:
                         self.last_spawned_car = Simulator.get_instance(
                         ).spawn_car(self)
                 else:
-                    print("s")
                     self.last_spawned_car = Simulator.get_instance().spawn_car(
                         self)
                 self.timer = 0

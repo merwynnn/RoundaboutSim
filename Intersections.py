@@ -142,6 +142,5 @@ class ClassicRoundabout(Intersection):
         for i, pos in enumerate(positions):
             angle = (2 * math.pi / n_cars) * i
             car_dir = Vec2(-math.sin(angle), math.cos(angle))  # Tangential direction
-            print(pos)
             index = self.get_index(self.closest_target(pos))
             self.simulator.spawn_car_at_position(pos, car_dir, intersection=self, target_position=self.targets[index], target_index = index)

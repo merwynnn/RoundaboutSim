@@ -114,7 +114,7 @@ class Simulator:
                    intersections=None,
                    roads=None,
                    road_extremity_spawners=None,
-                   car_spawn_interval=60,
+                   car_spawn_interval=60.0,
                    road_extremity_exits=None):
         print("init")
         self.total_ticks = 0
@@ -327,14 +327,12 @@ class Simulator:
 
     def spawn_car(self, start_extremity):
         self.total_cars_spawned_count += 1
-        print("spawn")
 
         # Randomly select an end extremity from the list of exits
         end_extremity = random.choice(self.road_extremity_exits)
 
         # Generate the path for the new car
         path = self.generate_path(start_extremity, end_extremity)
-        print(path)
 
         if path:  # Only spawn if a path exists
             car_img = random.choice(

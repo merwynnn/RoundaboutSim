@@ -41,13 +41,10 @@ class Car:
         self.safe_time_gap = 1.5
 
         ## Custom model
-        self.a = 0.4
-        self.b = 2
+        self.alpha= 0.4
+        self.beta = 2
 
-        self.c = 0.4
-        print(self.c / 2 * (-2 *
-                            (self.a - self.b * self.c / 2)**2 / self.c**4) +
-              self.b**2 / (2 * self.c**2))
+        self.gamma = 0.4
 
         self.desired_distance = 18
 
@@ -157,9 +154,9 @@ class Car:
 
         def A(v):
             u = -1 + cmath.exp(1j * v)
-            return ((self.b * u - self.c) / 2).real + max(
-                cmath.sqrt(((self.c - u * self.b) / 2)**2 + self.a * u).real,
-                -cmath.sqrt(((self.c - u * self.b) / 2)**2 + self.a * u).real)
+            return ((self.beta * u - self.c) / 2).real + max(
+                cmath.sqrt(((self.gamma - u * self.beta ) / 2)**2 + self.alpha* u).real,
+                -cmath.sqrt(((self.gamma - u * self.beta ) / 2)**2 + self.alpha* u).real)
 
         y = [A(v) for v in np.linspace(-math.pi, math.pi, 100)]
 
@@ -298,12 +295,12 @@ class Car:
                 (desired_distance / d)**2)
 
             if not obstacle:
-                self.acceleration = -self.c * (self.speed - self.target_speed)
+                self.acceleration = -self.gamma * (self.speed - self.target_speed)
             else:
-                self.acceleration = self.a * (
-                    d - self.desired_distance) + self.b * (
+                self.acceleration = self.alpha* (
+                    d - self.desired_distance) + self.beta * (
                         leading_car_speed -
-                        self.speed) - self.c * (self.speed - self.target_speed)
+                        self.speed) - self.gamma * (self.speed - self.target_speed)
 
         else:  # No current target position -> stop the car
             self.acceleration = -self.alpha
