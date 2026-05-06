@@ -12,7 +12,7 @@ print("start")
 # Pygame setup
 pygame.init()
 
-render = False
+render = True
 
 win = pygame.display.set_mode((WIDTH, HEIGHT)) if render else None
 pygame.display.set_caption("Roundabout Simulator")
@@ -26,7 +26,6 @@ simulator = Simulator(win, use_gui=render)
 
 car_spawn_interval = 0.2
 
-PAUSE = False
 
 
 def create_ring_road_setup(n):
@@ -72,8 +71,6 @@ def create_ring_road_setup(n):
 
     return intersections, roads, road_extremity_spawners, road_extremity_exits
 
-PAUSE = False
-
 """
 intersections, roads, road_extremity_spawners, road_extremity_exits = create_ring_road_setup(
         8)
@@ -83,6 +80,7 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
                         car_spawn_interval=car_spawn_interval,
                         road_extremity_exits=road_extremity_exits)
 """
+
 alpha_interval = [0.01, 0.1]
 
 beta_interval = [0.1, 0.5]
@@ -91,7 +89,8 @@ gamma_interval = [0.3, 1.0]
 
 
 
-def start_simulation_with_parameters(alpha, beta, gamma, n):
+
+def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
 
     intersections = [
                         ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS * 5, [])
@@ -115,16 +114,16 @@ def start_simulation_with_parameters(alpha, beta, gamma, n):
 
     end_simulation = False
 
-    time_multiplier = 4
+    time_multiplier = 1
 
     tick = 0
 
     total_time = 0
 
+    PAUSE = False
+
     while not end_simulation:
-        tick += 1
-        dt = DT * time_multiplier
-        total_time += dt
+        
 
         events = pygame.event.get()
 
@@ -132,23 +131,32 @@ def start_simulation_with_parameters(alpha, beta, gamma, n):
             if event.type == pygame.QUIT:
                 pygame.quit()
                 sys.exit()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
+                    PAUSE = not PAUSE
 
-        if 5<= total_time <= 10:
-            simulator.cars[0].speed = 0
+
 
         if PAUSE:
             continue
+
+        tick += 1
+        dt = DT * time_multiplier 
+        total_time += dt
+
+        if 5<= total_time <= 7:
+            simulator.cars[0].speed = 0
 
         if simulator:
             simulator.update(dt, events)
         
         if total_time >= 15:
             for car in simulator.cars:
-                if car.speed < 3:
+                if car.speed < 2.5:
                     end_simulation = True
                     return False
 
-        if total_time >= 200:
+        if total_time >= 500:
             end_simulation = True
 
             return True
@@ -167,6 +175,9 @@ def start_simulation_with_parameters(alpha, beta, gamma, n):
                                 (255, 255, 255))  # White color
             win.blit(fps_text, (10, 10))  # Position at top-left
 
+            pred_text = font.render(f"Pred: {'OK' if pred_ok else 'Not OK'}", True, (255, 255, 255))
+            win.blit(pred_text, (10, 40))
+
             pygame.display.update()
 
 def predict(alpha, beta, gamma, n):
@@ -182,14 +193,16 @@ def predict(alpha, beta, gamma, n):
 
     B = np.zeros((2*n, 2*n))
     B[:n,n:] = np.eye(n)
+    print(B)
     B[n:,:n] = alpha*A
-    B[:n,:n] = -beta*np.eye(n)+gamma*A
-
+    print(B)
+    B[n:,n:] = -beta*np.eye(n)+gamma*A
+    print(B)
     valeurs_propres, vecteurs_propres = np.linalg.eig(B)
 
-    #print("Valeurs propres :", valeurs_propres)
+    print("Valeurs propres :", valeurs_propres)
 
-    if np.any(valeurs_propres > 0):
+    if np.any(valeurs_propres.real > 0):
         return False
     return True
 
@@ -200,10 +213,11 @@ def plot_stability_map(alpha, n, resolution=20):
     i = 0
     for gamma in gammas:
         for beta in betas:
-            print(f"Sim {i}/{resolution**2}")
+            print(f"Sim {i}/{resolution**2}, alpha={alpha}, beta={beta}, gamma={gamma}")
             
-            sim_ok  = start_simulation_with_parameters(alpha, beta, gamma, n)
             pred_ok = predict(alpha, beta, gamma, n)
+            sim_ok  = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok)
+            
 
             color  = 'blue' if sim_ok  else 'red'
             marker = 'o'    if pred_ok else 'x'
@@ -217,4 +231,5 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.tight_layout()
     plt.show()
 
-plot_stability_map(alpha=0.1, n=30, resolution=3)
+plot_stability_map(alpha=0.1, n=32, resolution=3)
+

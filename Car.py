@@ -17,10 +17,11 @@ class Car:
                  path,
                  creation_tick,
                  car_image=None,
-                 target_position=None):
+                 target_position=None, id=0):
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
 
+        self.id = id
         self.creation_tick = creation_tick
 
         self.pos, self.dir = path[0].get_start_car_pos_dir() if path else (
@@ -29,13 +30,13 @@ class Car:
         self.selected = False  # Add selected attribute
 
         self.speed = 0
-        self.max_speed = 13.8889  # Vitesse maximale autorisée
+        self.max_speed = 25.8889  # Vitesse maximale autorisée
         self.acceleration = 0
         self.max_intersection_speed = 13
 
         # model parameters
         self.target_speed = 0  # Automaticaly set
-        self.max_acceleration = 1.4
+
         self.desired_acceleration = 2
         self.jam_distance = 2
         self.safe_time_gap = 1.5
@@ -48,9 +49,9 @@ class Car:
 
         self.desired_distance = 18
 
-        self.max_deceleration = -2  # Increased max_deceleration for quicker stops
-
         self.steering_speed = 40
+
+        self.next_car = None
 
         # Extremities
         self.last_extremity = path[0] if path else None
@@ -67,14 +68,10 @@ class Car:
             self.car_image = pygame.Surface((40, 40))
             self.car_image.fill((255, 0, 0))
 
-        self.min_detection_range_normal = REAL_CAR_LENGTH
-        self.detection_angle_threshold_normal = 70
-        self.detection_rotation_angle_normal = 0
-        self.detection_range = REAL_CAR_LENGTH * 8
-
-        self.min_detection_range = self.min_detection_range_normal
-        self.detection_angle_threshold = self.detection_angle_threshold_normal
-        self.detection_rotation_angle = self.detection_rotation_angle_normal
+        self.min_detection_range = REAL_CAR_LENGTH
+        self.detection_angle_threshold = 70
+        self.detection_rotation_angle = 0
+        self.detection_range = REAL_CAR_LENGTH * 32
 
         # Targets
         self.status = "EXITING"
@@ -106,12 +103,19 @@ class Car:
 
     def check_front(self):
 
+        if self.next_car is not None:
+            distance_to_next_car = (self.next_car.pos - self.pos).length()
+            if distance_to_next_car < self.detection_range:
+                return distance_to_next_car, self.next_car
+            else:
+                self.next_car = None  # plus de voiture détectée à l'avant
+        
         closest_car_distance = math.inf  # Initialise avec l'infini pour trouver le minimum
         car = None
 
         cars = self.simulator.cars
         for other_car in cars:
-
+            """
             if other_car is self or (
                     self.status == "APPROACHING"
                     and other_car.status == "APPROACHING"
@@ -121,52 +125,36 @@ class Car:
                   and other_car.status == "APPROACHING"
                   and other_car.current_target_extremity.intersection
                   == self.current_target_extremity.intersection):
-                continue
+                continue"""
 
             start_pos = self.pos
             vector_to_other = other_car.pos - start_pos
             distance = vector_to_other.length()
             if 0 < distance < self.detection_range:
+                
 
                 if vector_to_other.length_squared() > 1e-6:
-                    try:
-                        angle = self.dir.angle_to(
-                            vector_to_other) - self.detection_rotation_angle
-                        angle = (angle + 180) % 360 - 180
-                        if abs(angle) < self.detection_angle_threshold:
-
-                            # La voiture est devant et dans la portée
-                            if distance < closest_car_distance:
-                                closest_car_distance = distance
-                                car = other_car
-                    except ValueError:
-                        print(
-                            f"Warning: ValueError pendant le calcul d'angle pour la voiture à {self.pos}"
-                        )
-                        continue  # Passer à la voiture suivante
-
+                    
+                    if vector_to_other.dot(self.dir) <= 0:
+                        continue  # La voiture est derrière ou exactement sur le côté, ignorer
+                    """angle = self.dir.angle_to(
+                        vector_to_other) - self.detection_rotation_angle
+                    angle = (angle + 180) % 360 - 180
+                    if abs(angle) < self.detection_angle_threshold:
+                        """
+                        # La voiture est devant et dans la portée
+                    if distance < closest_car_distance:
+                        closest_car_distance = distance
+                        car = other_car
+                    
+        self.next_car = car  # Mémorise la voiture détectée à l'avant
+        print(f"Car {self.id} sees car {self.next_car.id}")
+        print(f"Vector to closest {self.next_car.pos-self.pos}, dir {self.dir}")
         return closest_car_distance, car
 
     def update_work(self, dt):
         self.work += CAR_WEIGHT * dt * max(0, self.acceleration * self.speed)
 
-    def S(self, plot=False):
-
-        def A(v):
-            u = -1 + cmath.exp(1j * v)
-            return ((self.beta * u - self.c) / 2).real + max(
-                cmath.sqrt(((self.gamma - u * self.beta ) / 2)**2 + self.alpha* u).real,
-                -cmath.sqrt(((self.gamma - u * self.beta ) / 2)**2 + self.alpha* u).real)
-
-        y = [A(v) for v in np.linspace(-math.pi, math.pi, 100)]
-
-        if plot:
-            x = np.linspace(-math.pi, math.pi, 100)
-
-            plt.plot(x, y)
-            plt.show()
-
-        return max(y)
 
     def move(self, dt):
         # La formule est simple. Prenez le chiffre des dizaines (5 pour 50 km/h) et multipliez-le par 3 (5 x 3 = 15). Puis, multipliez ce résultat par 2 (15 x 2 = 30). Vous obtenez la distance approximative à maintenir entre vous et le véhicule de devant (pour l’exemple 30 mètres). Facile non !?
@@ -271,8 +259,8 @@ class Car:
                 return  """
 
             # Determine max_speed based on context (intersection or straight road)
-            current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
-
+            #current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
+            current_max_speed = self.max_speed
             # If the car is approaching an intersection, slow down enough to enter the intersection
             self.target_speed = current_max_speed
             if self.status == "APPROACHING":
@@ -286,24 +274,25 @@ class Car:
                 leading_car_speed = obstacle.speed
 
             ## IDM
-            desired_distance = self.jam_distance + self.speed * self.safe_time_gap + self.speed * (
+            """desired_distance = self.jam_distance + self.speed * self.safe_time_gap + self.speed * (
                 abs(leading_car_speed - self.speed)) / (2 * math.sqrt(
                     self.max_acceleration * self.desired_acceleration))
 
             self.acceleration = self.max_acceleration * (
                 1 - (self.speed / self.target_speed)**4 -
-                (desired_distance / d)**2)
+                (desired_distance / d)**2)"""
 
             if not obstacle:
-                self.acceleration = -self.gamma * (self.speed - self.target_speed)
+                self.acceleration = -self.beta * (self.speed - self.target_speed)
             else:
                 self.acceleration = self.alpha* (
-                    d - self.desired_distance) + self.beta * (
-                        leading_car_speed -
-                        self.speed) - self.gamma * (self.speed - self.target_speed)
+                    d - self.desired_distance) - self.beta * (self.speed - self.target_speed) + self.gamma * (
+                        leading_car_speed - self.speed) 
 
         else:  # No current target position -> stop the car
-            self.acceleration = -self.alpha
+
+            print("No target position")
+            self.acceleration = 0
             self.current_target_position = self.get_next_target_position()
 
         # --- Mise à jour de la position ---
@@ -364,10 +353,6 @@ class Car:
             self.current_target_index += 1
             self.status = "INTERSECTION"
 
-            self.min_detection_range = self.last_extremity.intersection.min_detection_range
-            self.detection_angle_threshold = self.last_extremity.intersection.detection_angle_threshold
-            self.detection_rotation_angle = self.last_extremity.intersection.detection_rotation_angle
-
             return next_target_pos
 
         elif self.status == "EXITING":
@@ -375,10 +360,6 @@ class Car:
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             self.status = "APPROACHING"
-
-            self.min_detection_range = self.min_detection_range_normal
-            self.detection_angle_threshold = self.detection_angle_threshold_normal
-            self.detection_rotation_angle = self.detection_rotation_angle_normal
 
             target_pos, target_dir = self.last_extremity.get_end_car_pos_dir()
 
@@ -392,38 +373,6 @@ class Car:
             self.last_extremity = self.current_target_extremity
             self.current_target_extremity = self.get_next_target_extremity()
             return self.get_next_target_position()
-
-    def draw_rect(self, win):
-        # Car rectangle scaling
-        rect_width = self.simulator.camera.get_scaled_value(REAL_CAR_WIDTH)
-        rect_height = self.simulator.camera.get_scaled_value(REAL_CAR_LENGTH)
-        if rect_width < 1: rect_width = 1
-        if rect_height < 1: rect_height = 1
-
-        # Determine color based on speed
-        if self.speed == 0:
-            color = (255, 0, 0)  # Red for stationary
-        else:
-            # Interpolate from yellow (slow) to green (fast)
-            speed_ratio = min(self.speed / self.max_speed, 1.0)
-            red = int(255 * (1 - speed_ratio))
-            blue = int(255 * speed_ratio)
-            color = (red, 0, blue)
-
-        # Create a surface for the rectangle
-        rect_surface = pygame.Surface((rect_width, rect_height),
-                                      pygame.SRCALPHA)
-        rect_surface.fill(color)
-
-        # Rotate the rectangle
-        angle_degrees = self.dir.angle_to(Vec2(1, 0))
-        rotated_surface = pygame.transform.rotate(rect_surface,
-                                                  angle_degrees - 90)
-
-        # Apply camera transformation and draw
-        transformed_center = self.simulator.camera.apply(self.pos)
-        new_rect = rotated_surface.get_rect(center=transformed_center)
-        win.blit(rotated_surface, new_rect.topleft)
 
     def draw(self, win):
 
@@ -476,7 +425,7 @@ class Car:
                 font_size = max(
                     10, int(self.simulator.camera.get_scaled_value(1.5)))
                 font = pygame.font.Font(None, font_size)
-                text_surface = font.render(f"{int(closest_obstacle_distance)}",
+                text_surface = font.render(f"{self.id}",
                                            True, (255, 255, 255))  # White text
                 text_rect = text_surface.get_rect(
                     center=(transformed_center.x, transformed_center.y -

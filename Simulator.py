@@ -361,7 +361,7 @@ class Simulator:
         new_car = Car([],
                       self.total_ticks,
                       car_img,
-                      target_position=target_position)
+                      target_position=target_position, id = len(self.cars))
         new_car.current_target_index = target_index
 
         new_car.pos = position
