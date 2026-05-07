@@ -146,9 +146,6 @@ class Car:
         
         if self.simulator.total_ticks > 30:
             self.next_car = car  # Mémorise la voiture détectée à l'avant
-            if self.next_car:
-                print(f"Car {self.id} sees car {self.next_car.id}")
-                print(f"Vector to closest {self.next_car.pos-self.pos}, dir {self.dir}")
         return closest_car_distance, car
 
 

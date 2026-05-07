@@ -7,12 +7,15 @@ from Car import Car
 from Intersections import *
 import sys
 import matplotlib.pyplot as plt
+from multiprocessing import Pool
+
+
 
 print("start")
 # Pygame setup
 pygame.init()
 
-render = True
+render = False
 
 win = pygame.display.set_mode((WIDTH, HEIGHT)) if render else None
 pygame.display.set_caption("Roundabout Simulator")
@@ -22,7 +25,6 @@ clock = pygame.time.Clock()
 # Font for FPS display
 font = pygame.font.Font(None, 30)
 
-simulator = Simulator(win, use_gui=render)
 
 car_spawn_interval = 0.2
 
@@ -90,7 +92,9 @@ gamma_interval = [0.3, 1.0]
 
 
 
-def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
+def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
+    simulator = Simulator(win, use_gui=render)
+
 
     intersections = [
                         ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])
@@ -112,7 +116,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
         car.beta = beta
         car.gamma = gamma
 
-    time_multiplier = 0.05
+    time_multiplier = 0.1
 
     tick = 0
 
@@ -131,6 +135,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     PAUSE = not PAUSE
+                    print("PAUSE" if PAUSE else "RESUME")
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
@@ -146,22 +151,26 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
         dt = DT * time_multiplier 
         total_time += dt
 
-        if 5<= total_time <= 7:
-            simulator.cars[0].speed = 0
+        #if 5<= total_time <= 7:
+        #    simulator.cars[0].speed = 0
 
         if simulator:
             simulator.update(dt, events)
         
         if total_time >= 15:
             for car in simulator.cars:
+                if car.next_car:
+                    if (car.pos - car.next_car.pos).length() < 5:
+                        print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
+                        return False, simulator.energy_consumption/total_time
                 if car.speed < 2.5:
-                    return False, simulator.energy_consumption
+                    return False, simulator.energy_consumption/total_time
 
         if total_time >= 500:
 
-            return True, simulator.energy_consumption
+            return True, simulator.energy_consumption/total_time
         
-        if tick % 100 == 0:
+        if tick % 2000 == 0:
             print(f"time: {total_time}")
 
 
@@ -175,7 +184,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
                                 (255, 255, 255))  # White color
             win.blit(fps_text, (10, 10))  # Position at top-left
 
-            pred_text = font.render(f"Pred: {'OK' if pred_ok else 'Not OK'}", True, (255, 255, 255))
+            pred_text = font.render(f"Prediction: {'OK' if pred_ok else 'NOT OK'}, Max VP: {vp_max:.2f}", True, (255, 255, 255))
             win.blit(pred_text, (10, 40))
 
             pygame.display.update()
@@ -193,18 +202,15 @@ def predict(alpha, beta, gamma, n):
 
     B = np.zeros((2*n, 2*n))
     B[:n,n:] = np.eye(n)
-    print(B)
     B[n:,:n] = alpha*A
-    print(B)
     B[n:,n:] = -beta*np.eye(n)+gamma*A
-    print(B)
     valeurs_propres, vecteurs_propres = np.linalg.eig(B)
 
     print("Valeurs propres :", valeurs_propres)
 
-    if np.any(valeurs_propres.real > 0):
-        return False
-    return True
+    if np.any(valeurs_propres.real - 1e-6 > 0):
+        return False, valeurs_propres
+    return True, valeurs_propres
 
 
 import numpy as np
@@ -216,27 +222,46 @@ def plot_stability_map(alpha, n, resolution=20):
     
     # Initialisation d'une grille pour stocker l'énergie
     energy_grid = np.zeros((resolution, resolution))
+
+    valeurs_propres_max = []
+    puissances = []
     
     # Premier Graphique : Stabilité (Scatter plot)
     plt.figure(figsize=(14, 6))
     
     plt.subplot(1, 2, 1) # 1 ligne, 2 colonnes, index 1
+    inputs_parallels = [(alpha, beta, gamma, n, False, 0) for gamma in gammas for beta in betas]
+
+
+    
+    if render:
+        results = []
+        for g_idx, gamma in enumerate(gammas):
+            for b_idx, beta in enumerate(betas):
+                pred_ok, vp = predict(alpha, beta, gamma, n)
+                sim_ok, energy_consumption = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(vp))
+                results.append((sim_ok, energy_consumption))
+
+    else:
+        with Pool(5) as pool:
+            results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
+
+    
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
-            print(f"Sim {i+1}/{resolution**2}, alpha={alpha}, beta={beta}, gamma={gamma}")
-            
-            pred_ok = predict(alpha, beta, gamma, n)
-            sim_ok, energy_consumption = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok)
+            sim_ok, energy_consumption = results[i]
+            pred_ok, vp = predict(alpha, beta, gamma, n)
             
             # Stockage de l'énergie pour le heatmap
             energy_grid[g_idx, b_idx] = energy_consumption
 
             # Affichage Stabilité
-            color  = 'blue' if sim_ok  else 'red'
+            color  = 'blue' if pred_ok  else 'red'
             marker = 'o'    if pred_ok else 'x'
             plt.scatter(beta, gamma, c=color, marker=marker, s=60)
             i += 1
+        
 
     plt.xlabel('beta')
     plt.ylabel('gamma')
@@ -253,9 +278,18 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.ylabel('gamma')
     plt.title(f'Consommation Énergétique — alpha={alpha}')
 
+    """    # Troisième Graphique : Maximum des Valeurs Propres
+    plt.subplot(1, 3, 3) # index 3
+    plt.plot(valeurs_propres_max, puissances)
+    plt.xlabel('Simulation')
+    plt.ylabel('Max VP')
+    plt.title(f'Maximum des Valeurs Propres — alpha={alpha}')"""
+
     plt.tight_layout()
     plt.show()
 
 # Exemple d'appel
-plot_stability_map(alpha=0.3, n=6, resolution=4)
+
+if __name__ == '__main__':
+    plot_stability_map(alpha=0.3, n=10, resolution=10)
 

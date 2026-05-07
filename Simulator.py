@@ -148,6 +148,8 @@ class Simulator:
 
         self.initialized = True
 
+        self.energy_consumption = 0
+
     @classmethod
     def get_instance(cls):
         return cls._instance

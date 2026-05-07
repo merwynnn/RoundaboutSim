@@ -149,9 +149,18 @@ class ClassicRoundabout(Intersection):
     
     def spawn_evenly_spaced_cars(self, n_cars):
         positions = self.get_evenly_spaced_points(n_cars)
-        for i, pos in enumerate(positions):
-            angle = (2 * math.pi / n_cars) * i
+        for i, _ in enumerate(positions):
+            angle = (2 * math.pi / n_cars) * i 
+            # Use the center and radius to calculate the point position
+            
+
+            if i == 0:
+                angle += math.pi/n_cars
+
+            x = self.center.x + self.radius * math.cos(angle)
+            y = self.center.y + self.radius * math.sin(angle)
+
+            pos = Vec2(x, y)
             car_dir = Vec2(math.sin(angle), -math.cos(angle))  # Tangential direction
-            print(f"Spawning car at {pos} with direction {car_dir}")
             index = self.get_index(self.closest_target(pos, car_dir))
             self.simulator.spawn_car_at_position(pos, car_dir, intersection=self, target_position=self.targets[index], target_index = index)
