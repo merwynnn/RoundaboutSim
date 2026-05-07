@@ -52,7 +52,7 @@ class ClassicRoundabout(Intersection):
             self.exits.append(RoadExtremity((self.center.x + self.radius * exit_dir.x, self.center.y + self.radius * exit_dir.y), self))
 
         # Increased number of points from 14 to 20 for a smoother path around the roundabout.
-        self.targets = self.get_evenly_spaced_points(60)[::-1]
+        self.targets = self.get_evenly_spaced_points(ROUNDABOUT_RESOLUTION)[::-1]
 
         self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
 

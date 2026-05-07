@@ -14,16 +14,22 @@ REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 CAR_WEIGHT = 1500  # in kg
 
-ROUNDABOUT_RADIUS = 90  # in meters
+ROUNDABOUT_RADIUS = 320  # in meters, 90
 
 MAX_SIMULATION_TIME = 500  # in seconds
+
+MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
 DT = 0.1  # seconds per simulation step
 
+NUMBER_OF_CARS = 40
+
 DEBUG = False
+
+ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
 
 pygame.font.init()
 font = pygame.font.Font(None, 24)

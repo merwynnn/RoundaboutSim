@@ -15,7 +15,7 @@ print("start")
 # Pygame setup
 pygame.init()
 
-render = False
+render = True
 
 win = pygame.display.set_mode((WIDTH, HEIGHT)) if render else None
 pygame.display.set_caption("Roundabout Simulator")
@@ -338,5 +338,5 @@ def plot_stability_map(alpha, n, resolution=20):
 # Exemple d'appel
 
 if __name__ == '__main__':
-    plot_stability_map(alpha=0.02, n=10, resolution=4)
+    plot_stability_map(alpha=0.02, n=NUMBER_OF_CARS, resolution=4)
 

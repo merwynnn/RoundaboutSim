@@ -30,9 +30,8 @@ class Car:
         self.selected = False  # Add selected attribute
 
         self.speed = 0
-        self.max_speed = 25.8889  # Vitesse maximale autorisée
+        self.max_speed = MAX_SPEED  # Vitesse maximale autorisée
         self.acceleration = 0
-        self.max_intersection_speed = 13
 
         # model parameters
         self.target_speed = 0  # Automaticaly set
