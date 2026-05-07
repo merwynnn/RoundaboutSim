@@ -93,7 +93,7 @@ gamma_interval = [0.3, 1.0]
 def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
 
     intersections = [
-                        ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS * 5, [])
+                        ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])
                     ]
 
     roads = []
@@ -112,9 +112,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
         car.beta = beta
         car.gamma = gamma
 
-    end_simulation = False
-
-    time_multiplier = 1
+    time_multiplier = 0.05
 
     tick = 0
 
@@ -122,8 +120,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
 
     PAUSE = False
 
-    while not end_simulation:
-        
+    while True:
 
         events = pygame.event.get()
 
@@ -135,6 +132,11 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
                 if event.key == pygame.K_SPACE:
                     PAUSE = not PAUSE
 
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_UP:
+                    time_multiplier = min(2.0, time_multiplier * 2)
+                elif event.key == pygame.K_DOWN:
+                    time_multiplier = max(0.01, time_multiplier / 2)
 
 
         if PAUSE:
@@ -153,13 +155,11 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok):
         if total_time >= 15:
             for car in simulator.cars:
                 if car.speed < 2.5:
-                    end_simulation = True
-                    return False
+                    return False, simulator.energy_consumption
 
         if total_time >= 500:
-            end_simulation = True
 
-            return True
+            return True, simulator.energy_consumption
         
         if tick % 100 == 0:
             print(f"time: {total_time}")
@@ -207,29 +207,55 @@ def predict(alpha, beta, gamma, n):
     return True
 
 
+import numpy as np
+import matplotlib.pyplot as plt
+
 def plot_stability_map(alpha, n, resolution=20):
     gammas = np.linspace(gamma_interval[0], gamma_interval[1], resolution)
     betas  = np.linspace(beta_interval[0], beta_interval[1], resolution)
+    
+    # Initialisation d'une grille pour stocker l'énergie
+    energy_grid = np.zeros((resolution, resolution))
+    
+    # Premier Graphique : Stabilité (Scatter plot)
+    plt.figure(figsize=(14, 6))
+    
+    plt.subplot(1, 2, 1) # 1 ligne, 2 colonnes, index 1
     i = 0
-    for gamma in gammas:
-        for beta in betas:
-            print(f"Sim {i}/{resolution**2}, alpha={alpha}, beta={beta}, gamma={gamma}")
+    for g_idx, gamma in enumerate(gammas):
+        for b_idx, beta in enumerate(betas):
+            print(f"Sim {i+1}/{resolution**2}, alpha={alpha}, beta={beta}, gamma={gamma}")
             
             pred_ok = predict(alpha, beta, gamma, n)
-            sim_ok  = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok)
+            sim_ok, energy_consumption = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok)
             
+            # Stockage de l'énergie pour le heatmap
+            energy_grid[g_idx, b_idx] = energy_consumption
 
+            # Affichage Stabilité
             color  = 'blue' if sim_ok  else 'red'
             marker = 'o'    if pred_ok else 'x'
             plt.scatter(beta, gamma, c=color, marker=marker, s=60)
-
-            i+=1
+            i += 1
 
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title(f'Carte de stabilité — alpha={alpha}, n={n}')
+    plt.title(f'Carte de stabilité — alpha={alpha}')
+
+    # Deuxième Graphique : Heatmap de l'Énergie
+    plt.subplot(1, 2, 2) # index 2
+    # On utilise 'origin=lower' pour que l'axe Y corresponde aux gammas croissants vers le haut
+    im = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='viridis')
+    
+    plt.colorbar(im, label='Energy Consumption')
+    plt.xlabel('beta')
+    plt.ylabel('gamma')
+    plt.title(f'Consommation Énergétique — alpha={alpha}')
+
     plt.tight_layout()
     plt.show()
 
-plot_stability_map(alpha=0.1, n=32, resolution=3)
+# Exemple d'appel
+plot_stability_map(alpha=0.3, n=6, resolution=4)
 

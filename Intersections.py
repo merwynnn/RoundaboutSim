@@ -1,3 +1,5 @@
+import time
+
 import pygame
 from pygame import Vector2 as Vec2
 from Constants import *
@@ -96,14 +98,22 @@ class ClassicRoundabout(Intersection):
             points.append(Vec2(x, y))
         return points
     
-    def closest_target(self, pos):
+    def closest_target(self, pos, dir=None):
         min_dist = math.inf
         closest_target_id = None
         for id, target in enumerate(self.targets):
             dist = (target - pos).length()
             if dist < min_dist:
-                min_dist = dist
-                closest_target_id = id
+                if dir is not None:
+                    if (target - pos).length() != 0:
+                        target_dir = (target - pos).normalize()
+                        if target_dir.dot(dir) > 0:
+                            min_dist = dist
+                            closest_target_id = id
+                else:
+                    min_dist = dist
+                    closest_target_id = id
+
         return closest_target_id
         
     def get_index(self, i):
@@ -141,6 +151,7 @@ class ClassicRoundabout(Intersection):
         positions = self.get_evenly_spaced_points(n_cars)
         for i, pos in enumerate(positions):
             angle = (2 * math.pi / n_cars) * i
-            car_dir = Vec2(-math.sin(angle), math.cos(angle))  # Tangential direction
-            index = self.get_index(self.closest_target(pos))
+            car_dir = Vec2(math.sin(angle), -math.cos(angle))  # Tangential direction
+            print(f"Spawning car at {pos} with direction {car_dir}")
+            index = self.get_index(self.closest_target(pos, car_dir))
             self.simulator.spawn_car_at_position(pos, car_dir, intersection=self, target_position=self.targets[index], target_index = index)

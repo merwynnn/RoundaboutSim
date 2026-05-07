@@ -59,8 +59,6 @@ class Car:
         # Path
         self.path = path
 
-        self.work = 0
-
         # Image
         if car_image is not None:
             self.car_image = car_image.copy()
@@ -105,10 +103,9 @@ class Car:
 
         if self.next_car is not None:
             distance_to_next_car = (self.next_car.pos - self.pos).length()
-            if distance_to_next_car < self.detection_range:
+            vector_to_other = self.next_car.pos - self.pos
+            if 0 < distance_to_next_car < self.detection_range:
                 return distance_to_next_car, self.next_car
-            else:
-                self.next_car = None  # plus de voiture détectée à l'avant
         
         closest_car_distance = math.inf  # Initialise avec l'infini pour trouver le minimum
         car = None
@@ -146,14 +143,13 @@ class Car:
                     if distance < closest_car_distance:
                         closest_car_distance = distance
                         car = other_car
-                    
-        self.next_car = car  # Mémorise la voiture détectée à l'avant
-        print(f"Car {self.id} sees car {self.next_car.id}")
-        print(f"Vector to closest {self.next_car.pos-self.pos}, dir {self.dir}")
+        
+        if self.simulator.total_ticks > 30:
+            self.next_car = car  # Mémorise la voiture détectée à l'avant
+            if self.next_car:
+                print(f"Car {self.id} sees car {self.next_car.id}")
+                print(f"Vector to closest {self.next_car.pos-self.pos}, dir {self.dir}")
         return closest_car_distance, car
-
-    def update_work(self, dt):
-        self.work += CAR_WEIGHT * dt * max(0, self.acceleration * self.speed)
 
 
     def move(self, dt):
@@ -166,11 +162,11 @@ class Car:
             target_vector = self.current_target_position - self.pos
             distance = target_vector.length()
             if distance > self.critical_distance / 2:  # target position not reached
-
+                
                 target_dir = target_vector.normalize()
                 # Tourner progressivement vers la cible
-                angle = self.dir.angle_to(target_dir)
-                angle = (angle + 180) % 360 - 180
+                #angle = self.dir.angle_to(target_dir)
+                #angle = (angle + 180) % 360 - 180
                 self.dir = target_dir
 
             else:
@@ -303,7 +299,6 @@ class Car:
         dpos = self.dir * self.speed * dt
         self.pos += dpos
 
-        self.update_work(dt=dt)
 
     def get_next_target_extremity(self):
         self.path.pop(0)
@@ -398,11 +393,7 @@ class Car:
         new_rect = rotated_image.get_rect(center=transformed_center)
 
         # Dessiner l'image rotatée
-
-        if self.simulator.render_as_rect:
-            self.draw_rect(win)
-        else:
-            win.blit(rotated_image, new_rect.topleft)
+        win.blit(rotated_image, new_rect.topleft)
 
         if self.selected:
             scaled_offset = self.simulator.camera.get_scaled_value(
@@ -422,9 +413,7 @@ class Car:
 
             # Display detection distance
             if closest_obstacle_distance != math.inf:
-                font_size = max(
-                    10, int(self.simulator.camera.get_scaled_value(1.5)))
-                font = pygame.font.Font(None, font_size)
+                
                 text_surface = font.render(f"{self.id}",
                                            True, (255, 255, 255))  # White text
                 text_rect = text_surface.get_rect(
@@ -459,7 +448,15 @@ class Car:
             world_start_point = self.pos
             transformed_start_point = self.simulator.camera.apply(
                 world_start_point)
+            
+            target_point = self.simulator.camera.apply(self.pos + self.dir * 10)
+            pygame.draw.line(win, (255, 0, 0), transformed_start_point, target_point, debug_line_thickness)
+            if self.next_car:
+                target_point = self.simulator.camera.apply(self.next_car.pos)
+                pygame.draw.line(win, (255, 255, 0), transformed_start_point, target_point, debug_line_thickness)
+                pygame.draw.circle(win, (255, 255, 0), target_point, debug_circle_radius)
 
+            """
             if self.dir.length_squared() > 0:
                 angle_degrees += -self.detection_rotation_angle
                 # world_p1/p2 use self.detection_range (world unit)
@@ -473,10 +470,8 @@ class Car:
                 draw_p1 = self.simulator.camera.apply(world_p1)
                 draw_p2 = self.simulator.camera.apply(world_p2)
 
-                pygame.draw.line(win, color, transformed_start_point, draw_p1,
-                                 debug_line_thickness)
-                pygame.draw.line(win, color, transformed_start_point, draw_p2,
-                                 debug_line_thickness)
+                #pygame.draw.line(win, color, transformed_start_point, draw_p1,debug_line_thickness)
+                #pygame.draw.line(win, color, transformed_start_point, draw_p2,debug_line_thickness)
 
                 # Arc drawing: The radius used for pygame.Rect should be scaled.
                 scaled_arc_display_radius = self.simulator.camera.get_scaled_value(
@@ -496,6 +491,7 @@ class Car:
                         debug_line_thickness)
                 except Exception:
                     pass
+            """
 
     def handle_click(
             self,

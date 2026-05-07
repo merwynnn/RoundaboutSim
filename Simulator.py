@@ -8,7 +8,6 @@ from Road import Road, RoadExtremity
 from Car import Car
 from Camera import Camera  # Added
 from Intersections import *
-from SpatialGrid import SpatialGrid
 import os
 
 
@@ -45,8 +44,6 @@ class Simulator:
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
 
-        self.spatial_grid = SpatialGrid(WIDTH * 10, HEIGHT * 10, 100 / 8)
-
         self.initialized = False
 
         self.flow_manager = None
@@ -70,8 +67,7 @@ class Simulator:
         self.car_density_history = []
         self.exit_flow_rate_history = []
 
-        self.total_work = 0
-        self.total_work_complete = 0
+        self.energy_consumption = 0
 
     def get_average_car_lifetime(self):
         if not self.car_lifetimes:
@@ -178,8 +174,6 @@ class Simulator:
                 self.cars_exited_tick_during_delta) / self.flow_rate_time_delta
             self.exit_flow_rate_history.append(self.last_exit_flow_rate)
 
-        self.spatial_grid.update(self.cars)
-
         # Update simulation logic
         for road in self.roads:
             road.update(dt)
@@ -187,7 +181,7 @@ class Simulator:
             intersection.update(dt)
         for car in list(self.cars):
             car.move(dt)
-            self.total_work += car.work
+            self.energy_consumption += CAR_WEIGHT * max(car.acceleration, 0) * car.speed * dt  # energy consumption
 
         for road_extremity in self.road_extremity_spawners:
             road_extremity.update(dt)
@@ -248,7 +242,7 @@ class Simulator:
             f"Acceleration: {car.acceleration:.3f}",
             f"Target Speed: {car.target_speed*3.6:.2f}",
             f"Dist Obstacle: {car.check_front()[0]:.2f}",
-            f"Can Enter: {car.can_enter_intersection}", f"Work: {car.work:.2f}"
+            f"Can Enter: {car.can_enter_intersection}", f"Energy Consumption: {self.energy_consumption:.2f}"
         ]
 
         debug_rect_width = 200
@@ -313,9 +307,8 @@ class Simulator:
         if car in self.cars:
             self.total_cars_exited += 1
             self.cars_exited_tick_during_delta.append(self.total_ticks)
-            self.total_work_complete += car.work
             print(
-                f"Car exited.Total work completed mean: {self.total_work_complete/self.total_cars_exited:.2f}"
+                f"Car exited.Total energy consumption mean: {self.energy_consumption/self.total_cars_exited:.2f}"
             )
 
             self.cars.remove(car)
