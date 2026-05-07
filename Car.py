@@ -37,10 +37,6 @@ class Car:
         # model parameters
         self.target_speed = 0  # Automaticaly set
 
-        self.desired_acceleration = 2
-        self.jam_distance = 2
-        self.safe_time_gap = 1.5
-
         ## Custom model
         self.alpha= 0.4
         self.beta = 2
@@ -288,7 +284,7 @@ class Car:
             self.acceleration = 0
             self.current_target_position = self.get_next_target_position()
 
-        # --- Mise à jour de la position ---
+        # --- Mise à jour de la position --- Euler
         dv = self.acceleration * dt
         self.speed += dv
         self.speed = max(0, self.speed)

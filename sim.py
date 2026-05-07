@@ -85,9 +85,9 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
 
 alpha_interval = [0.01, 0.1]
 
-beta_interval = [0.1, 0.5]
+beta_interval = [0.01, 0.1]
 
-gamma_interval = [0.3, 1.0]
+gamma_interval = [0.1, 1.0]
 
 
 
@@ -121,6 +121,9 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
     tick = 0
 
     total_time = 0
+
+    max_acceleration = 0
+    min_acceleration = 0
 
     PAUSE = False
 
@@ -156,21 +159,29 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
 
         if simulator:
             simulator.update(dt, events)
+
+        for car in simulator.cars:
+            if car.acceleration > max_acceleration:
+                max_acceleration = car.acceleration
+            if car.acceleration < min_acceleration:
+                min_acceleration = car.acceleration
         
         if total_time >= 15:
             for car in simulator.cars:
                 if car.next_car:
                     if (car.pos - car.next_car.pos).length() < 5:
                         print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
-                        return False, simulator.energy_consumption/total_time
+                        print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+                        return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
                 if car.speed < 2.5:
-                    return False, simulator.energy_consumption/total_time
+                    print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+                    return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
 
-        if total_time >= 500:
-
-            return True, simulator.energy_consumption/total_time
+        if total_time >= MAX_SIMULATION_TIME:
+            print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+            return True, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
         
-        if tick % 2000 == 0:
+        if tick % 8000 == 0:
             print(f"time: {total_time}")
 
 
@@ -225,6 +236,9 @@ def plot_stability_map(alpha, n, resolution=20):
 
     valeurs_propres_max = []
     puissances = []
+
+    accelerations_max_grid = np.zeros((resolution, resolution))
+    accelerations_min_grid = np.zeros((resolution, resolution))
     
     # Premier Graphique : Stabilité (Scatter plot)
     plt.figure(figsize=(14, 6))
@@ -239,22 +253,28 @@ def plot_stability_map(alpha, n, resolution=20):
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
                 pred_ok, vp = predict(alpha, beta, gamma, n)
-                sim_ok, energy_consumption = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(vp))
-                results.append((sim_ok, energy_consumption))
+                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(vp))
+                results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
 
     else:
-        with Pool(5) as pool:
+        with Pool(2) as pool:
             results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
 
-    
+    plt.subplot(1, 2, 1)
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
-            sim_ok, energy_consumption = results[i]
+            sim_ok, energy_consumption, max_deceleration, min_deceleration = results[i]
             pred_ok, vp = predict(alpha, beta, gamma, n)
             
             # Stockage de l'énergie pour le heatmap
             energy_grid[g_idx, b_idx] = energy_consumption
+            valeurs_propres_max.append(np.max(vp))
+            puissances.append(energy_consumption)
+
+            accelerations_max_grid[g_idx, b_idx] = max_deceleration
+            accelerations_min_grid[g_idx, b_idx] = min_deceleration
+
 
             # Affichage Stabilité
             color  = 'blue' if pred_ok  else 'red'
@@ -262,6 +282,7 @@ def plot_stability_map(alpha, n, resolution=20):
             plt.scatter(beta, gamma, c=color, marker=marker, s=60)
             i += 1
         
+    print(accelerations_max_grid, accelerations_min_grid)
 
     plt.xlabel('beta')
     plt.ylabel('gamma')
@@ -270,7 +291,7 @@ def plot_stability_map(alpha, n, resolution=20):
     # Deuxième Graphique : Heatmap de l'Énergie
     plt.subplot(1, 2, 2) # index 2
     # On utilise 'origin=lower' pour que l'axe Y corresponde aux gammas croissants vers le haut
-    im = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+    im = plt.imshow(np.log10(energy_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
                     origin='lower', aspect='auto', cmap='viridis')
     
     plt.colorbar(im, label='Energy Consumption')
@@ -278,18 +299,44 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.ylabel('gamma')
     plt.title(f'Consommation Énergétique — alpha={alpha}')
 
-    """    # Troisième Graphique : Maximum des Valeurs Propres
-    plt.subplot(1, 3, 3) # index 3
-    plt.plot(valeurs_propres_max, puissances)
-    plt.xlabel('Simulation')
-    plt.ylabel('Max VP')
-    plt.title(f'Maximum des Valeurs Propres — alpha={alpha}')"""
+
 
     plt.tight_layout()
     plt.show()
 
+    plt.figure(figsize=(7, 6))
+    plt.plot(betas, np.log10(energy_grid[0]), label='Energy Consumption')
+    plt.xlabel('beta')
+    plt.ylabel('Energy Consumption')
+    plt.title(f'Energy Consumption vs beta for alpha={alpha} and gamma={gammas[0]}')
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(14, 6))
+
+    plt.subplot(1, 2, 1)
+    im = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='viridis')
+    
+    plt.colorbar(im, label='Max Acceleration')
+    plt.xlabel('beta')
+    plt.ylabel('gamma')
+    plt.title(f'Max Acceleration — alpha={alpha}')
+
+    plt.subplot(1, 2, 2)
+    im = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='viridis')
+    plt.colorbar(im, label='Min Acceleration')
+    plt.xlabel('beta')
+    plt.ylabel('gamma')
+    plt.title(f'Max Deceleration — alpha={alpha}')
+    plt.show()
+
+    
+
+
 # Exemple d'appel
 
 if __name__ == '__main__':
-    plot_stability_map(alpha=0.3, n=10, resolution=10)
+    plot_stability_map(alpha=0.02, n=10, resolution=4)
 

@@ -16,6 +16,8 @@ CAR_WEIGHT = 1500  # in kg
 
 ROUNDABOUT_RADIUS = 90  # in meters
 
+MAX_SIMULATION_TIME = 500  # in seconds
+
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
