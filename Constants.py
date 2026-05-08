@@ -49,9 +49,20 @@ RENDER = False  # Whether to render the simulation or not. Set to False for fast
 
 RING_ROAD = False   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 10
+RESOLUTION = 3
 
 
+##### Degraded Mode Parameters #####
+
+DEGRADED_MODE = False  
+
+ALPHA_FLUID = 0.02
+BETA_FLUID = 0.1
+GAMMA_FLUID = 0.1
+
+ALPHA_CONGESTED = 0.02
+BETA_CONGESTED = 0.12
+GAMMA_CONGESTED = 0.2
 
 
 ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle

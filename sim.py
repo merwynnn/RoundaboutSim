@@ -92,7 +92,7 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
 
 
 def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
-    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}----------------")
+    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}")
     simulator = Simulator(win, use_gui=RENDER)
 
     
@@ -122,7 +122,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
         car.beta = beta
         car.gamma = gamma
 
-    time_multiplier = 0.1
+    time_multiplier = 1
 
     tick = 0
 
@@ -179,7 +179,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
                     print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                     return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration"""
             if car.speed < 0:
-                print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+                print(f"Wrong way : Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                 return False, simulator.energy_consumption, max_acceleration, min_acceleration
             pass
 

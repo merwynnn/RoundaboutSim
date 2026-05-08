@@ -34,7 +34,7 @@ class Simulator:
             images.append(img)
         return images
 
-    def __init__(self, win=None, use_gui=True):
+    def __init__(self, win=None, use_gui=True, on_car_spawned=lambda car: None):
         Simulator._instance = self
         self.use_gui = use_gui
         self.win = win if self.use_gui else None
@@ -68,6 +68,8 @@ class Simulator:
         self.exit_flow_rate_history = []
 
         self.energy_consumption = 0
+
+        self.on_car_spawned = on_car_spawned  # can be set externally for custom behavior on car spawn
 
     def get_average_car_lifetime(self):
         if not self.car_lifetimes:
@@ -112,7 +114,6 @@ class Simulator:
                    road_extremity_spawners=None,
                    car_spawn_interval=60.0,
                    road_extremity_exits=None):
-        print("init")
         self.total_ticks = 0
         self.car_lifetimes = []
 
@@ -338,6 +339,8 @@ class Simulator:
             # ensure it uses the passed end_extremity or remove the internal call.
             # Let's assume Car uses the provided final_target_extremity.
             self.cars.append(new_car)
+
+            self.on_car_spawned(new_car)  # Call the callback for any additional setup
 
             return new_car
             # print(f"Spawned car from {start_extremity.pos} to {end_extremity.pos}") # For debugging
