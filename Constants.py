@@ -8,28 +8,31 @@ ROAD_COLOR = (113, 112, 113)
 LANE_WIDTH = 3.125
 STRIPE_WIDTH = 0.375
 
-BASE_CAR_LENGTH = 35 # Base size for car images at zoom level 1.0
-BASE_CAR_WIDTH = 20  # Base width for car images at zoom level 1.0
+BASE_CAR_LENGTH = 35 # Base size for car images at zoom level 1.0 in pixel
+BASE_CAR_WIDTH = 20  # Base width for car images at zoom level 1.0 in pixel
 REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 CAR_WEIGHT = 1500  # in kg
 
-ROUNDABOUT_RADIUS = 320  # in meters, 90
+NUMBER_OF_CARS = 36 #40
 
-MAX_SIMULATION_TIME = 500  # in seconds
+ROUNDABOUT_RADIUS = 90 #320  # in meters, 90
+
+MAX_SIMULATION_TIME = 600  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
+
+ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
+
+TARGET_DISTANCE = 19
 
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
 DT = 0.1  # seconds per simulation step
 
-NUMBER_OF_CARS = 40
 
 DEBUG = False
-
-ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
 
 pygame.font.init()
 font = pygame.font.Font(None, 24)

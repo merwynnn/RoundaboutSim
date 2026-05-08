@@ -273,8 +273,8 @@ class Simulator:
             f"Exit Flow Rate: {self.last_exit_flow_rate*360:.3f}",
             f"Car Density: {self.get_car_density()}",
             f"Mean Car Density: {self.get_mean_car_density():.2f}",
-            f"Mean Exit Flow Rate: {mean_exit_flow_rate}",
             f"Total time: {self.total_ticks*0.1:.1f}s",
+            f"Mean speed: {sum(car.speed for car in self.cars)/len(self.cars)*3.6:.2f} km/h" if self.cars else "Mean speed: N/A"
         ]
 
         debug_rect_width = 300

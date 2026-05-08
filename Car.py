@@ -42,7 +42,7 @@ class Car:
 
         self.gamma = 0.4
 
-        self.desired_distance = 18
+        self.desired_distance = TARGET_DISTANCE
 
         self.steering_speed = 40
 
@@ -64,7 +64,7 @@ class Car:
         self.min_detection_range = REAL_CAR_LENGTH
         self.detection_angle_threshold = 70
         self.detection_rotation_angle = 0
-        self.detection_range = REAL_CAR_LENGTH * 32
+        self.detection_range = self.desired_distance * 4
 
         # Targets
         self.status = "EXITING"
@@ -241,10 +241,11 @@ class Car:
             d = min(
                 distance_to_obstacle, math.inf
             )  #, self.distance_to_intersection, self.distance_on_exit_road)
-            """if distance_to_obstacle<self.critical_distance:  # Collision imminent
+            if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
                 self.speed = 0
-                return  """
+                print("stop")
+                return 
 
             # Determine max_speed based on context (intersection or straight road)
             #current_max_speed = self.max_speed if self.status == "APPROACHING" else self.max_intersection_speed
@@ -286,7 +287,7 @@ class Car:
         # --- Mise à jour de la position --- Euler
         dv = self.acceleration * dt
         self.speed += dv
-        self.speed = max(0, self.speed)
+        self.speed = max(0, self.speed)     # Pas de vitesse négative
 
         dpos = self.dir * self.speed * dt
         self.pos += dpos
@@ -406,7 +407,7 @@ class Car:
             # Display detection distance
             if closest_obstacle_distance != math.inf:
                 
-                text_surface = font.render(f"{self.id}",
+                text_surface = font.render(f"{self.speed*3.6:.1f} km/h",
                                            True, (255, 255, 255))  # White text
                 text_rect = text_surface.get_rect(
                     center=(transformed_center.x, transformed_center.y -

@@ -1,3 +1,4 @@
+import random
 import time
 
 import pygame
@@ -149,14 +150,11 @@ class ClassicRoundabout(Intersection):
     
     def spawn_evenly_spaced_cars(self, n_cars):
         positions = self.get_evenly_spaced_points(n_cars)
+        delta_angle = 2 * math.pi / n_cars
         for i, _ in enumerate(positions):
             angle = (2 * math.pi / n_cars) * i 
             # Use the center and radius to calculate the point position
-            
-
-            if i == 0:
-                angle += math.pi/n_cars
-
+            angle += random.uniform(0, delta_angle*0.8)  # Add some randomness to the angle for more natural spacing
             x = self.center.x + self.radius * math.cos(angle)
             y = self.center.y + self.radius * math.sin(angle)
 

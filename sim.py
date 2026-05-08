@@ -26,7 +26,16 @@ clock = pygame.time.Clock()
 font = pygame.font.Font(None, 30)
 
 
-car_spawn_interval = 0.2
+
+### Paramètres de la simulation ###
+
+car_spawn_interval = 10    # temps entre l'apparition de voitures (en secondes)
+
+alpha_interval = [0.02, 0.02]
+
+beta_interval = [0.05, 0.05]    # [0.01, 0.5]
+
+gamma_interval = [0.01, 0.01]   # [0.01, 0.5]
 
 
 
@@ -83,16 +92,13 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
                         road_extremity_exits=road_extremity_exits)
 """
 
-alpha_interval = [0.01, 0.1]
 
-beta_interval = [0.01, 0.1]
-
-gamma_interval = [0.1, 1.0]
 
 
 
 
 def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
+    print(f"Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}")
     simulator = Simulator(win, use_gui=render)
 
 
@@ -173,7 +179,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
                         print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
                         print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                         return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
-                if car.speed < 2.5:
+                if car.speed < 0.5:
                     print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                     return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
 
@@ -219,7 +225,8 @@ def predict(alpha, beta, gamma, n):
 
     print("Valeurs propres :", valeurs_propres)
 
-    if np.any(valeurs_propres.real - 1e-6 > 0):
+    # On cherche à savoir si toutes valeurs_propres ont une partie réelle négative ou nulle (stabilité)
+    if np.any(valeurs_propres.real - 1e-6 > 0):     # On soustrait un petit epsilon pour éviter les problèmes de précision numérique (valeurs propres nulles pouvant être légèrement positives à cause de la précision)
         return False, valeurs_propres
     return True, valeurs_propres
 
@@ -231,23 +238,15 @@ def plot_stability_map(alpha, n, resolution=20):
     gammas = np.linspace(gamma_interval[0], gamma_interval[1], resolution)
     betas  = np.linspace(beta_interval[0], beta_interval[1], resolution)
     
-    # Initialisation d'une grille pour stocker l'énergie
     energy_grid = np.zeros((resolution, resolution))
-
-    valeurs_propres_max = []
-    puissances = []
-
     accelerations_max_grid = np.zeros((resolution, resolution))
     accelerations_min_grid = np.zeros((resolution, resolution))
     
-    # Premier Graphique : Stabilité (Scatter plot)
-    plt.figure(figsize=(14, 6))
-    
-    plt.subplot(1, 2, 1) # 1 ligne, 2 colonnes, index 1
+    # 1. Create one single large figure
+    plt.figure(figsize=(18, 10)) 
+
     inputs_parallels = [(alpha, beta, gamma, n, False, 0) for gamma in gammas for beta in betas]
 
-
-    
     if render:
         results = []
         for g_idx, gamma in enumerate(gammas):
@@ -255,88 +254,74 @@ def plot_stability_map(alpha, n, resolution=20):
                 pred_ok, vp = predict(alpha, beta, gamma, n)
                 sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(vp))
                 results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
-
     else:
         with Pool(2) as pool:
             results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
 
-    plt.subplot(1, 2, 1)
+    # --- Data Processing and Plot 1 (Stability Scatter) ---
+    plt.subplot(2, 3, 1) # Position 1
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
             sim_ok, energy_consumption, max_deceleration, min_deceleration = results[i]
             pred_ok, vp = predict(alpha, beta, gamma, n)
             
-            # Stockage de l'énergie pour le heatmap
             energy_grid[g_idx, b_idx] = energy_consumption
-            valeurs_propres_max.append(np.max(vp))
-            puissances.append(energy_consumption)
-
             accelerations_max_grid[g_idx, b_idx] = max_deceleration
             accelerations_min_grid[g_idx, b_idx] = min_deceleration
 
-
-            # Affichage Stabilité
-            color  = 'blue' if pred_ok  else 'red'
-            marker = 'o'    if pred_ok else 'x'
-            plt.scatter(beta, gamma, c=color, marker=marker, s=60)
+            color  = 'blue' if pred_ok else 'red'
+            marker = 'o' if pred_ok else 'x'
+            plt.scatter(beta, gamma, c=color, marker=marker, s=40)
             i += 1
-        
-    print(accelerations_max_grid, accelerations_min_grid)
-
+            
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title(f'Carte de stabilité — alpha={alpha}')
+    plt.title(f'Stability Map (alpha={alpha})')
 
-    # Deuxième Graphique : Heatmap de l'Énergie
-    plt.subplot(1, 2, 2) # index 2
-    # On utilise 'origin=lower' pour que l'axe Y corresponde aux gammas croissants vers le haut
-    im = plt.imshow(np.log10(energy_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+    # --- Plot 2: Energy Heatmap ---
+    plt.subplot(2, 3, 2) # Position 2
+    im1 = plt.imshow(np.log10(energy_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
                     origin='lower', aspect='auto', cmap='viridis')
-    
-    plt.colorbar(im, label='Energy Consumption')
+    plt.colorbar(im1, label='Log10 Energy')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title(f'Consommation Énergétique — alpha={alpha}')
+    plt.title('Energy Consumption')
 
+    # --- Plot 3: Energy vs Beta Line Plot ---
+    plt.subplot(2, 3, 3) # Position 3
+    plt.plot(betas, np.log10(energy_grid[0]), label='Energy (first gamma row)')
+    plt.xlabel('beta')
+    plt.ylabel('Log10 Energy')
+    plt.title(f'Energy vs Beta (gamma={gammas[0]:.2f})')
+    plt.legend()
 
+    # --- Plot 4: Max Acceleration Heatmap ---
+    plt.subplot(2, 3, 4) # Position 4
+    im2 = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='magma')
+    plt.colorbar(im2, label='Max Accel')
+    plt.xlabel('beta')
+    plt.ylabel('gamma')
+    plt.title('Max Acceleration')
 
+    # --- Plot 5: Max Deceleration Heatmap ---
+    plt.subplot(2, 3, 5) # Position 5
+    im3 = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='plasma')
+    plt.colorbar(im3, label='Max Decel')
+    plt.xlabel('beta')
+    plt.ylabel('gamma')
+    plt.title('Max Deceleration')
+
+    # Final layout adjustments and single show call
     plt.tight_layout()
     plt.show()
 
-    plt.figure(figsize=(7, 6))
-    plt.plot(betas, np.log10(energy_grid[0]), label='Energy Consumption')
-    plt.xlabel('beta')
-    plt.ylabel('Energy Consumption')
-    plt.title(f'Energy Consumption vs beta for alpha={alpha} and gamma={gammas[0]}')
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(14, 6))
-
-    plt.subplot(1, 2, 1)
-    im = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
-                    origin='lower', aspect='auto', cmap='viridis')
-    
-    plt.colorbar(im, label='Max Acceleration')
-    plt.xlabel('beta')
-    plt.ylabel('gamma')
-    plt.title(f'Max Acceleration — alpha={alpha}')
-
-    plt.subplot(1, 2, 2)
-    im = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
-                    origin='lower', aspect='auto', cmap='viridis')
-    plt.colorbar(im, label='Min Acceleration')
-    plt.xlabel('beta')
-    plt.ylabel('gamma')
-    plt.title(f'Max Deceleration — alpha={alpha}')
-    plt.show()
-
-    
 
 
 # Exemple d'appel
 
 if __name__ == '__main__':
-    plot_stability_map(alpha=0.02, n=NUMBER_OF_CARS, resolution=4)
+    plot_stability_map(alpha=alpha_interval[0], n=NUMBER_OF_CARS, resolution=5)
 
