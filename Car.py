@@ -62,7 +62,8 @@ class Car:
             self.car_image.fill((255, 0, 0))
 
         self.min_detection_range = REAL_CAR_LENGTH
-        self.detection_angle_threshold = 70
+        self.detection_angle_threshold = 320
+        self.detection_rotation_treshold_ring_road = 40
         self.detection_rotation_angle = 0
         self.detection_range = self.desired_distance * 4
 
@@ -96,19 +97,27 @@ class Car:
 
     def check_front(self):
 
-        if self.next_car is not None:
+        """if self.next_car is not None:
             distance_to_next_car = (self.next_car.pos - self.pos).length()
             vector_to_other = self.next_car.pos - self.pos
             if 0 < distance_to_next_car < self.detection_range:
-                return distance_to_next_car, self.next_car
+                return distance_to_next_car, self.next_car"""
+        
+        detection_angle = self.detection_angle_threshold if self.status == "APPROACHING" else self.detection_rotation_treshold_ring_road
+        cos_seuil = math.cos(math.radians(detection_angle/2))
         
         closest_car_distance = math.inf  # Initialise avec l'infini pour trouver le minimum
+        
         car = None
-
+        
         cars = self.simulator.cars
+        
         for other_car in cars:
-            """
-            if other_car is self or (
+            if other_car is self:
+                continue
+            if other_car.status == "APPROACHING" and self.status == "INTERSECTION":
+                continue
+            """if other_car is self or (
                     self.status == "APPROACHING"
                     and other_car.status == "APPROACHING"
                     and other_car.current_target_extremity.intersection
@@ -126,8 +135,8 @@ class Car:
                 
 
                 if vector_to_other.length_squared() > 1e-6:
-                    
-                    if vector_to_other.dot(self.dir) <= 0:
+                    v_normalized = vector_to_other.normalize()
+                    if v_normalized.dot(self.dir) <= cos_seuil:
                         continue  # La voiture est derrière ou exactement sur le côté, ignorer
                     """angle = self.dir.angle_to(
                         vector_to_other) - self.detection_rotation_angle
@@ -181,6 +190,8 @@ class Car:
                         distance_to_obstacle = math.inf """
 
             self.distance_on_exit_road = math.inf
+
+            '''
             if (self.status == "INTERSECTION"
                     and self.reached_last_intersection_target
                 ) or self.status == "EXITING":
@@ -213,7 +224,9 @@ class Car:
 
                             if dist_to_other_car < self.distance_on_exit_road:
                                 self.distance_on_exit_road = dist_to_other_car
+            """"
 
+            '''
             self.distance_to_intersection = math.inf
 
             if self.status == "APPROACHING" and self.current_target_extremity.intersection:  # Approaching intersection
@@ -244,7 +257,6 @@ class Car:
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
                 self.speed = 0
-                print("stop")
                 return 
 
             # Determine max_speed based on context (intersection or straight road)
@@ -287,7 +299,7 @@ class Car:
         # --- Mise à jour de la position --- Euler
         dv = self.acceleration * dt
         self.speed += dv
-        self.speed = max(0, self.speed)     # Pas de vitesse négative
+        #self.speed = max(0, self.speed)     # Pas de vitesse négative
 
         dpos = self.dir * self.speed * dt
         self.pos += dpos
@@ -448,23 +460,22 @@ class Car:
                 target_point = self.simulator.camera.apply(self.next_car.pos)
                 pygame.draw.line(win, (255, 255, 0), transformed_start_point, target_point, debug_line_thickness)
                 pygame.draw.circle(win, (255, 255, 0), target_point, debug_circle_radius)
-
-            """
+            detection_angle = self.detection_angle_threshold if self.status == "APPROACHING" else self.detection_rotation_treshold_ring_road
             if self.dir.length_squared() > 0:
                 angle_degrees += -self.detection_rotation_angle
                 # world_p1/p2 use self.detection_range (world unit)
                 world_p1 = world_start_point + Vec2(
                     self.detection_range,
-                    0).rotate(-self.detection_angle_threshold - angle_degrees)
+                    0).rotate(-detection_angle/2 - angle_degrees)
                 world_p2 = world_start_point + Vec2(
                     self.detection_range,
-                    0).rotate(self.detection_angle_threshold - angle_degrees)
+                    0).rotate(detection_angle/2 - angle_degrees)
 
                 draw_p1 = self.simulator.camera.apply(world_p1)
                 draw_p2 = self.simulator.camera.apply(world_p2)
 
-                #pygame.draw.line(win, color, transformed_start_point, draw_p1,debug_line_thickness)
-                #pygame.draw.line(win, color, transformed_start_point, draw_p2,debug_line_thickness)
+                pygame.draw.line(win, color, transformed_start_point, draw_p1,debug_line_thickness)
+                pygame.draw.line(win, color, transformed_start_point, draw_p2,debug_line_thickness)
 
                 # Arc drawing: The radius used for pygame.Rect should be scaled.
                 scaled_arc_display_radius = self.simulator.camera.get_scaled_value(
@@ -478,13 +489,13 @@ class Car:
                     pygame.draw.arc(
                         win, color, debug_arc_rect,
                         math.radians(angle_degrees -
-                                     self.detection_angle_threshold),
+                                     detection_angle/2),
                         math.radians(angle_degrees +
-                                     self.detection_angle_threshold),
+                                     detection_angle/2),
                         debug_line_thickness)
                 except Exception:
                     pass
-            """
+            
 
     def handle_click(
             self,

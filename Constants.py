@@ -3,7 +3,7 @@ import pygame
 
 
 WIDTH, HEIGHT = 1000, 800
-BACKGROUND_COLOR = (0, 150, 0)
+BACKGROUND_COLOR = (16, 117, 38)   #(13, 12, 66)
 ROAD_COLOR = (113, 112, 113)
 LANE_WIDTH = 3.125
 STRIPE_WIDTH = 0.375
@@ -14,7 +14,7 @@ REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 CAR_WEIGHT = 1500  # in kg
 
-NUMBER_OF_CARS = 36 #40
+NUMBER_OF_CARS = 15 #40
 
 ROUNDABOUT_RADIUS = 90 #320  # in meters, 90
 
@@ -22,9 +22,40 @@ MAX_SIMULATION_TIME = 600  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
+TARGET_DISTANCE = 19
+
+
+ALPHA_INTERVAL = [0.02, 0.02]
+
+BETA_INTERVAL = [0.01, 0.5]
+
+GAMMA_INTERVAL = [0.01, 0.5]
+
+"""
+# Configuration "confort" non stable
+
+ALPHA_INTERVAL = [0.02, 0.02]
+BETA_INTERVAL = [0.1, 0.1]
+GAMMA_INTERVAL = [0.1, 0.1]
+
+# Configuration "confort" stable
+ALPHA_INTERVAL = [0.02, 0.02]
+BETA_INTERVAL = [0.12, 0.12]
+GAMMA_INTERVAL = [0.2, 0.12]
+"""
+
+
+RENDER = False  # Whether to render the simulation or not. Set to False for faster testing without visualization.   
+
+RING_ROAD = False   # Whether to use a ring road setup or a circular road setup.
+
+RESOLUTION = 10
+
+
+
+
 ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
 
-TARGET_DISTANCE = 19
 
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH

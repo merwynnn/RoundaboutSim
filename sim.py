@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import pygame
 import numpy as np
 from Simulator import Simulator
@@ -15,9 +17,8 @@ print("start")
 # Pygame setup
 pygame.init()
 
-render = True
 
-win = pygame.display.set_mode((WIDTH, HEIGHT)) if render else None
+win = pygame.display.set_mode((WIDTH, HEIGHT)) if RENDER else None
 pygame.display.set_caption("Roundabout Simulator")
 
 clock = pygame.time.Clock()
@@ -29,22 +30,15 @@ font = pygame.font.Font(None, 30)
 
 ### Paramètres de la simulation ###
 
-car_spawn_interval = 10    # temps entre l'apparition de voitures (en secondes)
-
-alpha_interval = [0.02, 0.02]
-
-beta_interval = [0.05, 0.05]    # [0.01, 0.5]
-
-gamma_interval = [0.01, 0.01]   # [0.01, 0.5]
+car_spawn_interval = 5    # temps entre l'apparition de voitures (en secondes)
 
 
 
 def create_ring_road_setup(n):
-    fixed_road_length = 100
-    radius = 300
+    fixed_road_length = 50
 
     directions = [Vec2(1, 0).rotate(i * 360 / n) for i in range(n)]
-    ring_road = ClassicRoundabout((0, 0), radius, directions)
+    ring_road = ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, directions)
 
     # Lists to hold the road extremities and roads
     road_extremity_spawners = []
@@ -98,21 +92,27 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
 
 
 def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
-    print(f"Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}")
-    simulator = Simulator(win, use_gui=render)
+    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}----------------")
+    simulator = Simulator(win, use_gui=RENDER)
 
+    
+    if RING_ROAD:
+        intersections, roads, road_extremity_spawners, road_extremity_exits = create_ring_road_setup(4)
+    else:
+        intersections = [
+                            ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])
+                        ]
 
-    intersections = [
-                        ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])
-                    ]
+        roads = []
 
-    roads = []
+        road_extremity_spawners = []
 
-    road_extremity_spawners = []
+        road_extremity_exits = []
 
     simulator.initialize(intersections,
                             roads,
                             road_extremity_spawners,
+                            road_extremity_exits=road_extremity_exits,
                             car_spawn_interval=car_spawn_interval)  
 
     intersections[0].spawn_evenly_spaced_cars(n)
@@ -172,28 +172,28 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max):
             if car.acceleration < min_acceleration:
                 min_acceleration = car.acceleration
         
-        if total_time >= 15:
-            for car in simulator.cars:
-                if car.next_car:
-                    if (car.pos - car.next_car.pos).length() < 5:
-                        print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
-                        print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-                        return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
-                if car.speed < 0.5:
+        for car in simulator.cars:
+            """if car.next_car:
+                if (car.pos - car.next_car.pos).length() < 5:
+                    print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
                     print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-                    return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
+                    return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration"""
+            if car.speed < 0:
+                print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+                return False, simulator.energy_consumption, max_acceleration, min_acceleration
+            pass
 
         if total_time >= MAX_SIMULATION_TIME:
             print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-            return True, simulator.energy_consumption/total_time, max_acceleration, min_acceleration
+            return True, simulator.energy_consumption, max_acceleration, min_acceleration
         
-        if tick % 8000 == 0:
-            print(f"time: {total_time}")
+        """if tick % 8000 == 0:
+            print(f"time: {total_time}")"""
 
 
 
         # Display FPS
-        if render:
+        if RENDER:
             clock.tick()
             fps = clock.get_fps()
             fps_text = font.render(f"FPS: {int(fps)}", True,
@@ -235,19 +235,21 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def plot_stability_map(alpha, n, resolution=20):
-    gammas = np.linspace(gamma_interval[0], gamma_interval[1], resolution)
-    betas  = np.linspace(beta_interval[0], beta_interval[1], resolution)
+    gammas = np.linspace(GAMMA_INTERVAL[0], GAMMA_INTERVAL[1], resolution)
+    betas  = np.linspace(BETA_INTERVAL[0], BETA_INTERVAL[1], resolution)
     
     energy_grid = np.zeros((resolution, resolution))
     accelerations_max_grid = np.zeros((resolution, resolution))
     accelerations_min_grid = np.zeros((resolution, resolution))
-    
+
+
+
     # 1. Create one single large figure
     plt.figure(figsize=(18, 10)) 
 
     inputs_parallels = [(alpha, beta, gamma, n, False, 0) for gamma in gammas for beta in betas]
 
-    if render:
+    if RENDER:
         results = []
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
@@ -275,6 +277,14 @@ def plot_stability_map(alpha, n, resolution=20):
             plt.scatter(beta, gamma, c=color, marker=marker, s=40)
             i += 1
             
+
+    current_date =  datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    with open(f"Data/energy_grid_{current_date}.txt", "w") as f:
+        f.write(f"Energy grid for alpha={alpha}, gammas={GAMMA_INTERVAL}, betas={BETA_INTERVAL}\n, n={n}\n, resolution={resolution}\n")
+        f.write(str(energy_grid))
+
+
+
     plt.xlabel('beta')
     plt.ylabel('gamma')
     plt.title(f'Stability Map (alpha={alpha})')
@@ -286,15 +296,16 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.colorbar(im1, label='Log10 Energy')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('Energy Consumption')
+    plt.title('log(Energy Consumption) in Joule')
 
     # --- Plot 3: Energy vs Beta Line Plot ---
     plt.subplot(2, 3, 3) # Position 3
-    plt.plot(betas, np.log10(energy_grid[0]), label='Energy (first gamma row)')
+    im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+                    origin='lower', aspect='auto', cmap='viridis')
+    plt.colorbar(im1, label='Energy')
     plt.xlabel('beta')
-    plt.ylabel('Log10 Energy')
-    plt.title(f'Energy vs Beta (gamma={gammas[0]:.2f})')
-    plt.legend()
+    plt.ylabel('gamma')
+    plt.title('Energy Consumption in Joule')
 
     # --- Plot 4: Max Acceleration Heatmap ---
     plt.subplot(2, 3, 4) # Position 4
@@ -323,5 +334,5 @@ def plot_stability_map(alpha, n, resolution=20):
 # Exemple d'appel
 
 if __name__ == '__main__':
-    plot_stability_map(alpha=alpha_interval[0], n=NUMBER_OF_CARS, resolution=5)
+    plot_stability_map(alpha=ALPHA_INTERVAL[0], n=NUMBER_OF_CARS, resolution=RESOLUTION)
 
