@@ -14,7 +14,7 @@ REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 CAR_WEIGHT = 1500  # in kg
 
-NUMBER_OF_CARS = 15 #40
+NUMBER_OF_CARS = 36 #40
 
 ROUNDABOUT_RADIUS = 90 #320  # in meters, 90
 
@@ -29,7 +29,7 @@ ALPHA_INTERVAL = [0.02, 0.02]
 
 BETA_INTERVAL = [0.01, 0.5]
 
-GAMMA_INTERVAL = [0.01, 0.5]
+GAMMA_INTERVAL = [0.01, 0.5]    
 
 """
 # Configuration "confort" non stable
@@ -49,20 +49,20 @@ RENDER = False  # Whether to render the simulation or not. Set to False for fast
 
 RING_ROAD = False   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 3
+RESOLUTION = 25
 
 
 ##### Degraded Mode Parameters #####
 
-DEGRADED_MODE = False  
+DEGRADED_MODE = True  
 
 ALPHA_FLUID = 0.02
 BETA_FLUID = 0.1
 GAMMA_FLUID = 0.1
 
-ALPHA_CONGESTED = 0.02
-BETA_CONGESTED = 0.12
-GAMMA_CONGESTED = 0.2
+ALPHA_CONGESTED = 0.02      
+BETA_CONGESTED = 0.01       # 0.12
+GAMMA_CONGESTED = 0.1733    #0.2
 
 
 ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
@@ -71,7 +71,11 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.1  # seconds per simulation step
+DT = 0.01  # seconds per simulation step
+
+EPSILON = 1e-4
+
+CAR_SPAWN_INTERVAL = 3 # seconds between car spawns
 
 
 DEBUG = False

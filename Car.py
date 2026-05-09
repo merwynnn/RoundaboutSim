@@ -62,7 +62,7 @@ class Car:
             self.car_image.fill((255, 0, 0))
 
         self.min_detection_range = REAL_CAR_LENGTH
-        self.detection_angle_threshold = 320
+        self.detection_angle_threshold = 310
         self.detection_rotation_treshold_ring_road = 40
         self.detection_rotation_angle = 0
         self.detection_range = self.desired_distance * 4
@@ -299,7 +299,7 @@ class Car:
         # --- Mise à jour de la position --- Euler
         dv = self.acceleration * dt
         self.speed += dv
-        #self.speed = max(0, self.speed)     # Pas de vitesse négative
+        self.speed = max(0, self.speed)     # Pas de vitesse négative
 
         dpos = self.dir * self.speed * dt
         self.pos += dpos

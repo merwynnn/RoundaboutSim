@@ -310,9 +310,6 @@ class Simulator:
         if car in self.cars:
             self.total_cars_exited += 1
             self.cars_exited_tick_during_delta.append(self.total_ticks)
-            print(
-                f"Car exited.Total energy consumption mean: {self.energy_consumption/self.total_cars_exited:.2f}"
-            )
 
             self.cars.remove(car)
             lifetime = self.total_ticks - car.creation_tick
@@ -329,6 +326,7 @@ class Simulator:
 
         # Generate the path for the new car
         path = self.generate_path(start_extremity, end_extremity)
+
 
         if path:  # Only spawn if a path exists
             car_img = random.choice(
@@ -372,5 +370,7 @@ class Simulator:
         new_car.status = "INTERSECTION"
 
         self.cars.append(new_car)
+
+        self.on_car_spawned(new_car)  # Call the callback for any additional setup
 
         return new_car
