@@ -18,22 +18,22 @@ NUMBER_OF_CARS = 30 #40
 
 ROUNDABOUT_RADIUS = 100 #320  # in meters, 90
 
-MAX_SIMULATION_TIME = 800  # in seconds
+MAX_SIMULATION_TIME = 400  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
 TARGET_DISTANCE = 20
 
 
-ALPHA_INTERVAL = [0.02, 0.02]
+ALPHA_INTERVAL = [0.03, 0.03]
 
 BETA_INTERVAL = [0.01, 0.5]
 
 GAMMA_INTERVAL = [0.01, 0.5]    
 
-#BETA_INTERVAL = [0.17333333333333334]*2
+BETA_INTERVAL = [0.1325]*2
 
-#GAMMA_INTERVAL = [0.01]*2
+GAMMA_INTERVAL = [0.01]*2
 
 """
 # Configuration "confort" non stable
@@ -49,11 +49,11 @@ GAMMA_INTERVAL = [0.2, 0.12]
 """
 
 
-RENDER = False  # Whether to render the simulation or not. Set to False for faster testing without visualization.   
+RENDER = True  # Whether to render the simulation or not. Set to False for faster testing without visualization.   
 
 RING_ROAD = False   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 10
+RESOLUTION = 5
 
 
 ##### Degraded Mode Parameters #####
@@ -75,7 +75,7 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.05  # seconds per simulation step
+DT = 0.1 if not RENDER else 0.01  # seconds per simulation step
 
 EPSILON = 1e-8
 
@@ -97,7 +97,6 @@ def to_world(value):
 
 # --- Paramètres globaux ---
 TAU = 0.3              # s, constante EMA
-DT = 0.1                 # s, pas de simulation
 V_FREE = 20.0 / 3.6      # m/s, trafic libre
 V_CONG = 18.0 / 3.6      # m/s, trafic congestionné
 DV_UP = 10.0 / 3.6       # m/s, seuil de variation pour front amont du trafic (ralentissement)

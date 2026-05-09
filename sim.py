@@ -191,7 +191,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
 
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_UP:
-                    time_multiplier = min(2.0, time_multiplier * 2)
+                    time_multiplier = min(8.0, time_multiplier * 2)
                 elif event.key == pygame.K_DOWN:
                     time_multiplier = max(0.01, time_multiplier / 2)
 
@@ -203,8 +203,9 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
         dt = DT * time_multiplier 
         total_time += dt
 
-        #if 5<= total_time <= 7:
-        #    simulator.cars[0].speed = 0
+
+        if 5<= total_time <= 6:
+            simulator.cars[0].speed = 0
 
         if simulator:
             simulator.update(dt, events)
@@ -231,13 +232,12 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
                     print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                     return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration"""
 
-            if car.speed < 2 and car.status == "INTERSECTION":
+            if car.speed < 0.9*car.max_speed and car.status == "INTERSECTION":
                 #congested = True
                 congested_cars += 1
-
-        if len(simulator.cars) > 0:
-            if congested_cars/len(simulator.cars) > 0.1:        # if more than 10% of the cars are moving very slowly (<2m/s) in the circular road, we consider the trafic congested
-                #print("congested")
+        
+        if len(simulator.cars) > 0 and total_time > 50:
+            if congested_cars/len(simulator.cars) > 0.05:        # if more than 10% of the cars are moving very slowly (<2m/s) in the circular road, we consider the trafic congested
                 congested = True
 
             """if car.speed < 0:
@@ -355,7 +355,7 @@ def plot_stability_map(alpha, n, resolution=20):
 
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title(f'Stability Map (alpha={alpha})')
+    plt.title(f'Comparaison modèle/simulation (alpha={alpha})')
 
     # --- Plot 2: Energy Heatmap ---
     plt.subplot(2, 3, 2) # Position 2
@@ -364,16 +364,16 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.colorbar(im1, label='Log10 Energy')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('log(Energy Consumption)')
+    plt.title('log(Consommation énergétique (J)))')
 
     # --- Plot 3: Energy vs Beta Line Plot ---
     plt.subplot(2, 3, 3) # Position 3
     im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
                     origin='lower', aspect='auto', cmap='viridis')
-    plt.colorbar(im1, label='Energy (J)')
+    plt.colorbar(im1, label='Consommation énergétique (J)')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('Energy Consumption')
+    plt.title('Consommation énergétique (J)')
 
     # --- Plot 4: Max Acceleration Heatmap ---
     plt.subplot(2, 3, 4) # Position 4
@@ -423,9 +423,9 @@ def plot_car_optimization_percentage_map(n, resolution=10):
 
     # --- Plot 2: Energy Consumption vs Rate ---
     ax2.plot(optimized_car_rates, energy_vals, color='firebrick', marker='o', markersize=4, linestyle='-')
-    ax2.set_ylabel('Energy Consumption', fontweight='bold')
-    ax2.set_xlabel('Optimized Car Rate', fontweight='bold')
-    ax2.set_title('Energy Consumption vs. Optimized Car Rate', fontsize=14)
+    ax2.set_ylabel('Consommation énergétique (J)', fontweight='bold')
+    ax2.set_xlabel('Taux de véhicules optimisées', fontweight='bold')
+    ax2.set_title('Consommation énergétique vs. Taux de véhicules optimisées', fontsize=14)
     ax2.grid(True, linestyle='--', alpha=0.7)
 
     # Optional: Highlight the "Fail" zones on the energy plot for context

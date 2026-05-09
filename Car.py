@@ -256,7 +256,7 @@ class Car:
             )  #, self.distance_to_intersection, self.distance_on_exit_road)
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
-                self.speed = 0
+                self.speed = obstacle.speed 
                 return 
 
             # Determine max_speed based on context (intersection or straight road)
