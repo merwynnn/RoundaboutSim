@@ -12,6 +12,7 @@ import matplotlib.pyplot as plt
 from multiprocessing import Pool
 
 
+random.seed(43)  # Set a fixed seed for reproducibility of results.
 
 print("start")
 # Pygame setup
@@ -29,7 +30,7 @@ font = pygame.font.Font(None, 30)
 
 
 def create_ring_road_setup(n):
-    fixed_road_length = 50
+    fixed_road_length = 70
 
     directions = [Vec2(1, 0).rotate(i * 360 / n) for i in range(n)]
     ring_road = ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, directions)
@@ -135,8 +136,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
                             road_extremity_exits=road_extremity_exits,
                             car_spawn_interval=CAR_SPAWN_INTERVAL,)  
 
-    if not RING_ROAD:
-        intersections[0].spawn_evenly_spaced_cars(n)
+    intersections[0].spawn_evenly_spaced_cars(n)
 
     optimized_car = 0
 
@@ -171,6 +171,8 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
     min_acceleration = 0
 
     congested = False
+
+    max_cars_in_ring_road = 0
 
     PAUSE = False
 
@@ -207,14 +209,22 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
         if simulator:
             simulator.update(dt, events)
 
+
+        congested_cars = 0
+
+        cars_in_ring_road = 0
+
         for car in simulator.cars:
             if car.acceleration > max_acceleration:
                 max_acceleration = car.acceleration
             if car.acceleration < min_acceleration:
                 min_acceleration = car.acceleration
+
+            if car.status == "INTERSECTION":
+                cars_in_ring_road += 1
+
         
-        congested_cars = 0
-        for car in simulator.cars:
+
             """if car.next_car:
                 if (car.pos - car.next_car.pos).length() < 5:
                     print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
@@ -233,10 +243,15 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             """if car.speed < 0:
                 print(f"Wrong way : Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                 return False, simulator.energy_consumption, max_acceleration, min_acceleration"""
+            
+        # Update the maximum number of cars in the ring road
+        if cars_in_ring_road > max_cars_in_ring_road:
+            max_cars_in_ring_road = cars_in_ring_road
 
         if total_time >= MAX_SIMULATION_TIME:
-            print(congested)
+            print(congested,predict(alpha, beta, gamma, n)[0], "alpha:", alpha, "beta:", beta, "gamma:", gamma)
             print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
+            print(f"Max cars in ring road: {max_cars_in_ring_road}")
             return not congested, simulator.energy_consumption, max_acceleration, min_acceleration
         
         if tick % 8000 == 0:
@@ -275,7 +290,7 @@ def predict(alpha, beta, gamma, n):
     B[n:,n:] = -beta*np.eye(n)+gamma*A
     valeurs_propres, vecteurs_propres = np.linalg.eig(B)
 
-    print("Valeurs propres :", valeurs_propres)
+    #print("Valeurs propres :", valeurs_propres)
 
     # On cherche à savoir si toutes valeurs_propres ont une partie réelle négative ou nulle (stabilité)
     if np.any(valeurs_propres.real - EPSILON > 0):     # On soustrait un petit epsilon pour éviter les problèmes de précision numérique (valeurs propres nulles pouvant être légèrement positives à cause de la précision)
@@ -306,7 +321,7 @@ def plot_stability_map(alpha, n, resolution=20):
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
                 pred_ok, vp = predict(alpha, beta, gamma, n)
-                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(vp)- EPSILON )
+                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(np.real(vp)) - EPSILON)
                 results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
     else:
         with Pool(2) as pool:
@@ -319,13 +334,14 @@ def plot_stability_map(alpha, n, resolution=20):
         for b_idx, beta in enumerate(betas):
             sim_ok, energy_consumption, max_deceleration, min_deceleration = results[i]
             pred_ok, vp = predict(alpha, beta, gamma, n)
-            
+            print("Temps caractéristique : ", math.log(2)/np.max(np.real(vp)), pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, np.max(np.real(vp)))
             energy_grid[g_idx, b_idx] = energy_consumption
             accelerations_max_grid[g_idx, b_idx] = max_deceleration
             accelerations_min_grid[g_idx, b_idx] = min_deceleration
 
-            color  = 'blue' if sim_ok else 'red'
+            color  = 'green' if sim_ok == pred_ok else 'red'
             marker = 'o' if pred_ok else 'x'
+
             plt.scatter(beta, gamma, c=color, marker=marker, s=40)
             i += 1
             
@@ -348,16 +364,16 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.colorbar(im1, label='Log10 Energy')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('log(Energy Consumption) in Joule')
+    plt.title('log(Energy Consumption)')
 
     # --- Plot 3: Energy vs Beta Line Plot ---
     plt.subplot(2, 3, 3) # Position 3
     im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
                     origin='lower', aspect='auto', cmap='viridis')
-    plt.colorbar(im1, label='Energy')
+    plt.colorbar(im1, label='Energy (J)')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('Energy Consumption in Joule')
+    plt.title('Energy Consumption')
 
     # --- Plot 4: Max Acceleration Heatmap ---
     plt.subplot(2, 3, 4) # Position 4
