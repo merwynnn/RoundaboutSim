@@ -87,9 +87,12 @@ intersections, roads, road_extremity_spawners, road_extremity_exits = create_rin
 
 
 def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, degraded_mode=False, optimized_car_rate=1):
-    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}----------------")
+    pred_ok, valeurs_propres, max_vp = predict(alpha, beta, gamma, n)
+    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}, dt: {DT}----------------")
 
 
+    predicted_simulation_time = max(MIN_SIMULATION_TIME, abs(math.log(2)/max_vp*3))
+    print("predicted_sim_time", predicted_simulation_time)
 
     def on_car_spawned(car):
         if degraded_mode:
@@ -104,7 +107,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
                     car.alpha = ALPHA_CONGESTED
                     car.beta = BETA_CONGESTED
                     car.gamma = GAMMA_CONGESTED
-                
+               
         else:
             car.alpha = alpha
             car.beta = beta
@@ -177,7 +180,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
     PAUSE = False
 
     while True:
-
+        min_distance_between_cars = math.inf
         events = pygame.event.get()
 
         for event in events:
@@ -200,7 +203,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             continue
 
         tick += 1
-        dt = DT * time_multiplier 
+        dt = DT * time_multiplier
         total_time += dt
 
 
@@ -224,7 +227,8 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             if car.status == "INTERSECTION":
                 cars_in_ring_road += 1
 
-        
+            if car.distance_to_obstacle < min_distance_between_cars:
+                min_distance_between_cars = car.distance_to_obstacle
 
             """if car.next_car:
                 if (car.pos - car.next_car.pos).length() < 5:
@@ -232,28 +236,31 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
                     print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                     return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration"""
 
-            if car.speed < 0.9*car.max_speed and car.status == "INTERSECTION":
+            """if car.speed < 0.9*car.max_speed and car.status == "INTERSECTION":
                 #congested = True
-                congested_cars += 1
-        
-        if len(simulator.cars) > 0 and total_time > 50:
-            if congested_cars/len(simulator.cars) > 0.05:        # if more than 10% of the cars are moving very slowly (<2m/s) in the circular road, we consider the trafic congested
+                congested_cars += 1"""
+           
+       
+       
+        if len(simulator.cars) > 0 and total_time > predicted_simulation_time*0.9:
+            if min_distance_between_cars < 0.85 * 2*ROUNDABOUT_RADIUS*math.pi / n :        # if the minimum distance between cars is less than 2 meters, we consider the traffic congested
+                # print("congested", f"Min distance between cars: {min_distance_between_cars:.2f} m", "distance threshold: ", 0.95 * 2*ROUNDABOUT_RADIUS*math.pi / n)
                 congested = True
 
             """if car.speed < 0:
                 print(f"Wrong way : Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
                 return False, simulator.energy_consumption, max_acceleration, min_acceleration"""
-            
+           
         # Update the maximum number of cars in the ring road
         if cars_in_ring_road > max_cars_in_ring_road:
             max_cars_in_ring_road = cars_in_ring_road
 
-        if total_time >= MAX_SIMULATION_TIME:
-            print(congested,predict(alpha, beta, gamma, n)[0], "alpha:", alpha, "beta:", beta, "gamma:", gamma)
+        if total_time >= predicted_simulation_time:
+            print(congested,pred_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp" , max_vp)
             print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
             print(f"Max cars in ring road: {max_cars_in_ring_road}")
-            return not congested, simulator.energy_consumption, max_acceleration, min_acceleration
-        
+            return not congested, simulator.energy_consumption/predicted_simulation_time, max_acceleration, min_acceleration
+       
         if tick % 8000 == 0:
             print(f"time: {total_time}")
 
@@ -292,10 +299,16 @@ def predict(alpha, beta, gamma, n):
 
     #print("Valeurs propres :", valeurs_propres)
 
+    max_vp = -math.inf
+    for vp in valeurs_propres.real:
+        if vp > max_vp and not (-1e-10 < vp < 1e-10):
+            max_vp = vp
+
+
     # On cherche à savoir si toutes valeurs_propres ont une partie réelle négative ou nulle (stabilité)
     if np.any(valeurs_propres.real - EPSILON > 0):     # On soustrait un petit epsilon pour éviter les problèmes de précision numérique (valeurs propres nulles pouvant être légèrement positives à cause de la précision)
-        return False, valeurs_propres
-    return True, valeurs_propres
+        return False, valeurs_propres, max_vp
+    return True, valeurs_propres, max_vp
 
 
 import numpy as np
@@ -304,7 +317,7 @@ import matplotlib.pyplot as plt
 def plot_stability_map(alpha, n, resolution=20):
     gammas = np.linspace(GAMMA_INTERVAL[0], GAMMA_INTERVAL[1], resolution)
     betas  = np.linspace(BETA_INTERVAL[0], BETA_INTERVAL[1], resolution)
-    
+   
     energy_grid = np.zeros((resolution, resolution))
     accelerations_max_grid = np.zeros((resolution, resolution))
     accelerations_min_grid = np.zeros((resolution, resolution))
@@ -312,7 +325,7 @@ def plot_stability_map(alpha, n, resolution=20):
 
 
     # 1. Create one single large figure
-    plt.figure(figsize=(18, 10)) 
+    plt.figure(figsize=(18, 10))
 
     inputs_parallels = [(alpha, beta, gamma, n, False, 0, False, 0.25) for gamma in gammas for beta in betas]
 
@@ -320,21 +333,21 @@ def plot_stability_map(alpha, n, resolution=20):
         results = []
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
-                pred_ok, vp = predict(alpha, beta, gamma, n)
-                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, np.max(np.real(vp)) - EPSILON)
+                pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
+                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, max_vp)
                 results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
     else:
         with Pool(2) as pool:
             results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
 
     # --- Data Processing and Plot 1 (Stability Scatter) ---
-    plt.subplot(2, 3, 1) # Position 1
+    plt.subplot(2, 2, 1) # Position 1
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
             sim_ok, energy_consumption, max_deceleration, min_deceleration = results[i]
-            pred_ok, vp = predict(alpha, beta, gamma, n)
-            print("Temps caractéristique : ", math.log(2)/np.max(np.real(vp)), pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, np.max(np.real(vp)))
+            pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
+            print("Temps caractéristique : ", math.log(2)/max_vp, pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp: ", max_vp, "dt: ", DT, "max_vp_mod=",np.max(np.abs(vp)))
             energy_grid[g_idx, b_idx] = energy_consumption
             accelerations_max_grid[g_idx, b_idx] = max_deceleration
             accelerations_min_grid[g_idx, b_idx] = min_deceleration
@@ -344,7 +357,7 @@ def plot_stability_map(alpha, n, resolution=20):
 
             plt.scatter(beta, gamma, c=color, marker=marker, s=40)
             i += 1
-            
+           
 
     current_date =  datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     with open(f"Data/energy_grid_{current_date}.txt", "w") as f:
@@ -357,27 +370,20 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.ylabel('gamma')
     plt.title(f'Comparaison modèle/simulation (alpha={alpha})')
 
-    # --- Plot 2: Energy Heatmap ---
-    plt.subplot(2, 3, 2) # Position 2
-    im1 = plt.imshow(np.log10(energy_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
-                    origin='lower', aspect='auto', cmap='viridis')
-    plt.colorbar(im1, label='Log10 Energy')
-    plt.xlabel('beta')
-    plt.ylabel('gamma')
-    plt.title('log(Consommation énergétique (J)))')
+
 
     # --- Plot 3: Energy vs Beta Line Plot ---
-    plt.subplot(2, 3, 3) # Position 3
-    im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+    plt.subplot(2, 2, 2) # Position 3
+    im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='viridis')
-    plt.colorbar(im1, label='Consommation énergétique (J)')
+    plt.colorbar(im1, label='Consommation énergétique moyenne (W)')
     plt.xlabel('beta')
     plt.ylabel('gamma')
-    plt.title('Consommation énergétique (J)')
+    plt.title('Consommation énergétique (W)')
 
     # --- Plot 4: Max Acceleration Heatmap ---
-    plt.subplot(2, 3, 4) # Position 4
-    im2 = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+    plt.subplot(2, 2, 3) # Position 4
+    im2 = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='magma')
     plt.colorbar(im2, label='Max Accel')
     plt.xlabel('beta')
@@ -385,8 +391,8 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.title('Max Acceleration')
 
     # --- Plot 5: Max Deceleration Heatmap ---
-    plt.subplot(2, 3, 5) # Position 5
-    im3 = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]], 
+    plt.subplot(2, 2, 4) # Position 5
+    im3 = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='plasma')
     plt.colorbar(im3, label='Max Decel')
     plt.xlabel('beta')
@@ -402,7 +408,7 @@ def plot_car_optimization_percentage_map(n, resolution=10):
     optimized_car_rates = np.linspace(0, 1, resolution)
     results = []
     for rate in optimized_car_rates:
-        sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(ALPHA_INTERVAL[0], BETA_INTERVAL[0], GAMMA_INTERVAL[0], n, False, 0, degraded_mode=True, optimized_car_rate=rate)
+        sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(ALPHA_FLUID, BETA_FLUID, GAMMA_FLUID, n, False, 0, degraded_mode=True, optimized_car_rate=rate)
         results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
         print(f"Optimized car rate: {rate:.2f}, Simulation OK: {sim_ok}, Energy: {energy_consumption:.2f}, Max Decel: {max_deceleration:.2f}, Min Decel: {min_deceleration:.2f}")
 
@@ -423,15 +429,15 @@ def plot_car_optimization_percentage_map(n, resolution=10):
 
     # --- Plot 2: Energy Consumption vs Rate ---
     ax2.plot(optimized_car_rates, energy_vals, color='firebrick', marker='o', markersize=4, linestyle='-')
-    ax2.set_ylabel('Consommation énergétique (J)', fontweight='bold')
-    ax2.set_xlabel('Taux de véhicules optimisées', fontweight='bold')
-    ax2.set_title('Consommation énergétique vs. Taux de véhicules optimisées', fontsize=14)
+    ax2.set_ylabel('Consommation énergétique (W)', fontweight='bold')
+    ax2.set_xlabel('Taux de véhicules optimisés', fontweight='bold')
+    ax2.set_title('Consommation énergétique vs. Taux de véhicules optimisés', fontsize=14)
     ax2.grid(True, linestyle='--', alpha=0.7)
 
     # Optional: Highlight the "Fail" zones on the energy plot for context
     for i in range(len(sim_status)):
         if sim_status[i] == 0:
-            ax2.axvspan(optimized_car_rates[i], optimized_car_rates[min(i+1, len(sim_status)-1)], 
+            ax2.axvspan(optimized_car_rates[i], optimized_car_rates[min(i+1, len(sim_status)-1)],
                         color='gray', alpha=0.1)
 
     plt.show()
@@ -445,4 +451,6 @@ if __name__ == '__main__':
         plot_car_optimization_percentage_map(n=NUMBER_OF_CARS, resolution=RESOLUTION)
     else:
         plot_stability_map(alpha=ALPHA_INTERVAL[0], n=NUMBER_OF_CARS, resolution=RESOLUTION)
+
+
 

@@ -63,7 +63,7 @@ class Car:
 
         self.min_detection_range = REAL_CAR_LENGTH
         self.detection_angle_threshold = 310
-        self.detection_rotation_treshold_ring_road = 40
+        self.detection_rotation_treshold_ring_road = 100
         self.detection_rotation_angle = 0
         self.detection_range = self.desired_distance * 4
 
@@ -94,14 +94,15 @@ class Car:
         # état courant et timestamp du dernier changement d'état
         self.state = FREE
         self.state_time = 0.0  # temps passé dans l'état courant (s)
+        self.distance_to_obstacle = 0
 
     def check_front(self):
 
-        """if self.next_car is not None:
+        if self.next_car is not None:
             distance_to_next_car = (self.next_car.pos - self.pos).length()
             vector_to_other = self.next_car.pos - self.pos
-            if 0 < distance_to_next_car < self.detection_range:
-                return distance_to_next_car, self.next_car"""
+            # if 0 < distance_to_next_car < self.detection_range:
+            return distance_to_next_car, self.next_car
         
         detection_angle = self.detection_angle_threshold if self.status == "APPROACHING" else self.detection_rotation_treshold_ring_road
         cos_seuil = math.cos(math.radians(detection_angle/2))
@@ -131,7 +132,7 @@ class Car:
             start_pos = self.pos
             vector_to_other = other_car.pos - start_pos
             distance = vector_to_other.length()
-            if 0 < distance < self.detection_range:
+            if 0 < distance: # < self.detection_range:
                 
 
                 if vector_to_other.length_squared() > 1e-6:
@@ -148,7 +149,7 @@ class Car:
                         closest_car_distance = distance
                         car = other_car
         
-        if self.simulator.total_ticks > 30:
+        if self.simulator.total_ticks > 2:
             self.next_car = car  # Mémorise la voiture détectée à l'avant
         return closest_car_distance, car
 
@@ -254,9 +255,11 @@ class Car:
             d = min(
                 distance_to_obstacle, math.inf
             )  #, self.distance_to_intersection, self.distance_on_exit_road)
+
+            self.distance_to_obstacle = distance_to_obstacle
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
-                self.speed = obstacle.speed 
+                self.speed = obstacle.speed
                 return 
 
             # Determine max_speed based on context (intersection or straight road)

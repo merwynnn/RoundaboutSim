@@ -18,22 +18,22 @@ NUMBER_OF_CARS = 30 #40
 
 ROUNDABOUT_RADIUS = 100 #320  # in meters, 90
 
-MAX_SIMULATION_TIME = 400  # in seconds
+MIN_SIMULATION_TIME = 200  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
 TARGET_DISTANCE = 20
 
 
-ALPHA_INTERVAL = [0.03, 0.03]
+ALPHA_INTERVAL = [0.02, 0.02]
 
 BETA_INTERVAL = [0.01, 0.5]
 
-GAMMA_INTERVAL = [0.01, 0.5]    
+GAMMA_INTERVAL = [0.01, 0.5] 
 
-BETA_INTERVAL = [0.1325]*2
+# BETA_INTERVAL = [0.1325]*2
 
-GAMMA_INTERVAL = [0.01]*2
+# GAMMA_INTERVAL = [0.255]*2
 
 """
 # Configuration "confort" non stable
@@ -49,25 +49,29 @@ GAMMA_INTERVAL = [0.2, 0.12]
 """
 
 
-RENDER = True  # Whether to render the simulation or not. Set to False for faster testing without visualization.   
+RENDER = False  # Whether to render the simulation or not. Set to False for faster testing without visualization.   
 
-RING_ROAD = False   # Whether to use a ring road setup or a circular road setup.
+RING_ROAD = True   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 5
+RESOLUTION = 10
 
 
 ##### Degraded Mode Parameters #####
 
 DEGRADED_MODE = False  
-
+"""
 ALPHA_FLUID = 0.02
-BETA_FLUID = 0.1
-GAMMA_FLUID = 0.1
+BETA_FLUID = 0.1188
+GAMMA_FLUID = 0.1188
+"""
+ALPHA_FLUID = 0.02
+BETA_FLUID = 0.174
+GAMMA_FLUID = 0.174
+
 
 ALPHA_CONGESTED = 0.02      
-BETA_CONGESTED = 0.01       # 0.12
-GAMMA_CONGESTED = 0.1733    #0.2
-
+BETA_CONGESTED = 0.0644       # 0.12
+GAMMA_CONGESTED = 0.0644    #0.2
 
 ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circle
 
@@ -75,7 +79,7 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.1 if not RENDER else 0.01  # seconds per simulation step
+DT = 0.02 if not RENDER else 0.02  # seconds per simulation step
 
 EPSILON = 1e-8
 

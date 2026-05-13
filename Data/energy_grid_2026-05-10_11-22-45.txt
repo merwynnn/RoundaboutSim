@@ -1,0 +1,4 @@
+Energy grid for alpha=0.01, gammas=[0.01, 0.01], betas=[0.17333, 0.17333]
+, n=30
+, resolution=1
+[[14078419.79719113]]
