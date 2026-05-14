@@ -483,16 +483,11 @@ def plot_car_optimization_percentage_map(n, resolution=10):
 # Exemple d'appel
 
 if __name__ == '__main__':
-    start_time = time.time()
-    
     if DEGRADED_MODE:
         plot_car_optimization_percentage_map(n=NUMBER_OF_CARS, resolution=RESOLUTION)
     else:
         plot_stability_map(alpha=ALPHA_INTERVAL[0], n=NUMBER_OF_CARS, resolution=RESOLUTION)
-    
-    end_time = time.time()
-    total_time = end_time - start_time
-    print(f"\n===== TOTAL SIMULATION TIME: {total_time:.2f} seconds ({total_time/60:.2f} minutes) =====")
 
-
+    plt.savefig('results.png')
+    print("Plot saved to results.png")
 
