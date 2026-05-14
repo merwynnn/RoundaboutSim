@@ -81,7 +81,7 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.02 if not RENDER else 0.02  # seconds per simulation step
+DT = 0.05 if not RENDER else 0.02  # seconds per simulation step
 
 EPSILON = 1e-8
 
