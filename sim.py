@@ -436,7 +436,9 @@ def plot_stability_map(alpha, n, resolution=20):
         plt.title('Taux de congestion moyen')
 
     # Final layout adjustments and single show call
-    plt.tight_layout()
+    plt.savefig('results.png')
+    print("Plot saved to results.png")
+
     plt.show()
 
 
@@ -476,6 +478,8 @@ def plot_car_optimization_percentage_map(n, resolution=10):
             ax2.axvspan(optimized_car_rates[i], optimized_car_rates[min(i+1, len(sim_status)-1)],
                         color='gray', alpha=0.1)
 
+    plt.savefig('results.png')
+    print("Plot saved to results.png")
     plt.show()
 
 
@@ -488,6 +492,5 @@ if __name__ == '__main__':
     else:
         plot_stability_map(alpha=ALPHA_INTERVAL[0], n=NUMBER_OF_CARS, resolution=RESOLUTION)
 
-    plt.savefig('results.png')
-    print("Plot saved to results.png")
+
 
