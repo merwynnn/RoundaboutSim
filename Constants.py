@@ -14,15 +14,17 @@ REAL_CAR_LENGTH = 4.36 # in meters
 REAL_CAR_WIDTH = 2.5  # in meters
 CAR_WEIGHT = 1500  # in kg
 
-NUMBER_OF_CARS = 30 #40
+NUMBER_OF_CARS = 27 #40
 
 ROUNDABOUT_RADIUS = 100 #320  # in meters, 90
 
-MIN_SIMULATION_TIME = 200  # in seconds
+MIN_SIMULATION_TIME = 800  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
 TARGET_DISTANCE = 20
+
+RING_ROAD_ENTER_MIN_DISTANCE = 20
 
 
 ALPHA_INTERVAL = [0.02, 0.02]
@@ -31,9 +33,9 @@ BETA_INTERVAL = [0.01, 0.5]
 
 GAMMA_INTERVAL = [0.01, 0.5] 
 
-# BETA_INTERVAL = [0.1325]*2
+BETA_INTERVAL = [0.33]*2
 
-# GAMMA_INTERVAL = [0.255]*2
+GAMMA_INTERVAL = [0.33]*2
 
 """
 # Configuration "confort" non stable
@@ -79,11 +81,11 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.02 if not RENDER else 0.02  # seconds per simulation step
+DT = 0.1 if not RENDER else 0.02  # seconds per simulation step
 
 EPSILON = 1e-8
 
-CAR_SPAWN_INTERVAL = 5 # seconds between car spawns
+CAR_SPAWN_INTERVAL = 20 # seconds between car spawns
 
 
 DEBUG = False

@@ -1,4 +1,5 @@
 from datetime import datetime
+import time
 
 import pygame
 import numpy as np
@@ -174,7 +175,8 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
     min_acceleration = 0
 
     congested = False
-
+    
+    total_cars_in_ring_road = 0
     max_cars_in_ring_road = 0
 
     PAUSE = False
@@ -226,6 +228,7 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
 
             if car.status == "INTERSECTION":
                 cars_in_ring_road += 1
+                total_cars_in_ring_road += 1
 
             if car.distance_to_obstacle < min_distance_between_cars:
                 min_distance_between_cars = car.distance_to_obstacle
@@ -258,8 +261,12 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
         if total_time >= predicted_simulation_time:
             print(congested,pred_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp" , max_vp)
             print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-            print(f"Max cars in ring road: {max_cars_in_ring_road}")
-            return not congested, simulator.energy_consumption/predicted_simulation_time, max_acceleration, min_acceleration
+            print(f"Max cars in ring road: {max_cars_in_ring_road}, Mean cars in ring road: {total_cars_in_ring_road/tick}")
+
+            average_completion_time = simulator.get_average_completion_time() if RING_ROAD else 0
+
+            print(f"Average completion time: {average_completion_time:.2f}")
+            return not congested, simulator.energy_consumption/predicted_simulation_time, max_acceleration, min_acceleration, average_completion_time
        
         if tick % 8000 == 0:
             print(f"time: {total_time}")
@@ -321,11 +328,13 @@ def plot_stability_map(alpha, n, resolution=20):
     energy_grid = np.zeros((resolution, resolution))
     accelerations_max_grid = np.zeros((resolution, resolution))
     accelerations_min_grid = np.zeros((resolution, resolution))
-
-
+    completion_time_grid = np.zeros((resolution, resolution))
 
     # 1. Create one single large figure
-    plt.figure(figsize=(18, 10))
+    if RING_ROAD:
+        plt.figure(figsize=(22, 10))
+    else:
+        plt.figure(figsize=(18, 10))
 
     inputs_parallels = [(alpha, beta, gamma, n, False, 0, False, 0.25) for gamma in gammas for beta in betas]
 
@@ -334,23 +343,30 @@ def plot_stability_map(alpha, n, resolution=20):
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
                 pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
-                sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, max_vp)
-                results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
+                sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, max_vp)
+                results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time))
     else:
         with Pool(2) as pool:
             results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
 
     # --- Data Processing and Plot 1 (Stability Scatter) ---
-    plt.subplot(2, 2, 1) # Position 1
+
+    plt.subplot(2, 3, 1)
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
-            sim_ok, energy_consumption, max_deceleration, min_deceleration = results[i]
+            sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time = results[i]
             pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
-            print("Temps caractéristique : ", math.log(2)/max_vp, pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp: ", max_vp, "dt: ", DT, "max_vp_mod=",np.max(np.abs(vp)))
+
+
+            print("Temps caractéristique : ", math.log(2)/max_vp, pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp: ", max_vp, "dt: ", DT, "max_vp_mod=",np.max(np.abs(vp)), "average_completion_time: ", average_completion_time)
+            
+            
             energy_grid[g_idx, b_idx] = energy_consumption
             accelerations_max_grid[g_idx, b_idx] = max_deceleration
             accelerations_min_grid[g_idx, b_idx] = min_deceleration
+            if RING_ROAD:
+                completion_time_grid[g_idx, b_idx] = average_completion_time
 
             color  = 'green' if sim_ok == pred_ok else 'red'
             marker = 'o' if pred_ok else 'x'
@@ -373,7 +389,7 @@ def plot_stability_map(alpha, n, resolution=20):
 
 
     # --- Plot 3: Energy vs Beta Line Plot ---
-    plt.subplot(2, 2, 2) # Position 3
+    plt.subplot(2, 3, 2) # Position 2
     im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='viridis')
     plt.colorbar(im1, label='Consommation énergétique moyenne (W)')
@@ -382,7 +398,8 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.title('Consommation énergétique (W)')
 
     # --- Plot 4: Max Acceleration Heatmap ---
-    plt.subplot(2, 2, 3) # Position 4
+
+    plt.subplot(2, 3, 3) # Position 3
     im2 = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='magma')
     plt.colorbar(im2, label='Max Accel')
@@ -391,13 +408,32 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.title('Max Acceleration')
 
     # --- Plot 5: Max Deceleration Heatmap ---
-    plt.subplot(2, 2, 4) # Position 5
+
+    plt.subplot(2, 3, 4) # Position 4
     im3 = plt.imshow(-accelerations_min_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='plasma')
     plt.colorbar(im3, label='Max Decel')
     plt.xlabel('beta')
     plt.ylabel('gamma')
     plt.title('Max Deceleration')
+
+    # --- Plot 6: Completion Time Heatmap (only if RING_ROAD) ---
+    if RING_ROAD:
+        plt.subplot(2, 3, 5) # Position 5
+        im4 = plt.imshow(completion_time_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
+                        origin='lower', aspect='auto', cmap='cool')
+        plt.colorbar(im4, label='Completion Time (s)')
+        plt.xlabel('beta')
+        plt.ylabel('gamma')
+        plt.title('Average Completion Time')
+
+        plt.subplot(2, 3, 6) # Position 6
+        im4 = plt.imshow(np.log10(completion_time_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
+                        origin='lower', aspect='auto', cmap='cool')
+        plt.colorbar(im4, label='Log (Temps de complétion moyen (s))')
+        plt.xlabel('beta')
+        plt.ylabel('gamma')
+        plt.title('Temps de complétion moyen')
 
     # Final layout adjustments and single show call
     plt.tight_layout()
@@ -447,10 +483,16 @@ def plot_car_optimization_percentage_map(n, resolution=10):
 # Exemple d'appel
 
 if __name__ == '__main__':
+    start_time = time.time()
+    
     if DEGRADED_MODE:
         plot_car_optimization_percentage_map(n=NUMBER_OF_CARS, resolution=RESOLUTION)
     else:
         plot_stability_map(alpha=ALPHA_INTERVAL[0], n=NUMBER_OF_CARS, resolution=RESOLUTION)
+    
+    end_time = time.time()
+    total_time = end_time - start_time
+    print(f"\n===== TOTAL SIMULATION TIME: {total_time:.2f} seconds ({total_time/60:.2f} minutes) =====")
 
 
 

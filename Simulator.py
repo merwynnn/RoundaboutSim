@@ -62,7 +62,7 @@ class Simulator:
         self.last_exited_car_tick = 0
 
         self.total_ticks = 0
-        self.car_lifetimes = []
+        self.completion_times = []
 
         self.car_density_history = []
         self.exit_flow_rate_history = []
@@ -71,10 +71,10 @@ class Simulator:
 
         self.on_car_spawned = on_car_spawned  # can be set externally for custom behavior on car spawn
 
-    def get_average_car_lifetime(self):
-        if not self.car_lifetimes:
+    def get_average_completion_time(self):
+        if not self.completion_times:
             return 0
-        return sum(self.car_lifetimes) / len(self.car_lifetimes)
+        return sum(self.completion_times) / len(self.completion_times)
 
     def get_car_density(self):
         return len(self.cars)
@@ -115,7 +115,7 @@ class Simulator:
                    car_spawn_interval=60.0,
                    road_extremity_exits=None):
         self.total_ticks = 0
-        self.car_lifetimes = []
+        self.completion_times = []
 
         self.car_density_history = []
         self.real_entry_flow_rate_history = []
@@ -271,11 +271,9 @@ class Simulator:
                                len(self.exit_flow_rate_history)) if len(
                                    self.exit_flow_rate_history) > 0 else 0
         debug_info = [
-            f"Exit Flow Rate: {self.last_exit_flow_rate*360:.3f}",
-            f"Car Density: {self.get_car_density()}",
-            f"Mean Car Density: {self.get_mean_car_density():.2f}",
             f"Total time: {self.total_ticks*0.1:.1f}s",
-            f"Mean speed: {sum(car.speed for car in self.cars)/len(self.cars)*3.6:.2f} km/h" if self.cars else "Mean speed: N/A"
+            f"Mean speed: {sum(car.speed for car in self.cars)/len(self.cars)*3.6:.2f} km/h" if self.cars else "Mean speed: N/A",
+            f"Average completion time: {self.get_average_completion_time():.2f}s",
         ]
 
         debug_rect_width = 300
@@ -312,8 +310,10 @@ class Simulator:
             self.cars_exited_tick_during_delta.append(self.total_ticks)
 
             self.cars.remove(car)
-            lifetime = self.total_ticks - car.creation_tick
-            self.car_lifetimes.append(lifetime)
+            lifetime_ticks = self.total_ticks - car.creation_tick
+            lifetime_seconds = lifetime_ticks * DT
+            #print(f"Car lifetime: {lifetime_seconds:.2f} seconds")
+            self.completion_times.append(lifetime_seconds)
         # Optional: Clean up the car object if necessary (Python's garbage collector usually handles this)
         # del car
         # print("Car reached destination and was removed.") # For debugging
@@ -322,7 +322,11 @@ class Simulator:
         self.total_cars_spawned_count += 1
 
         # Randomly select an end extremity from the list of exits
-        end_extremity = random.choice(self.road_extremity_exits)
+        #end_extremity = random.choice(self.road_extremity_exits)
+
+
+        # Makes sure only the furthest exit is selected
+        end_extremity = self.road_extremity_exits[0] if (self.road_extremity_exits[0].pos - start_extremity.pos).length() < (self.road_extremity_exits[1].pos - start_extremity.pos).length() else self.road_extremity_exits[1]
 
         # Generate the path for the new car
         path = self.generate_path(start_extremity, end_extremity)
@@ -333,9 +337,7 @@ class Simulator:
                 self.preloaded_car_images
             ) if self.use_gui and self.preloaded_car_images else None
             new_car = Car(path, self.total_ticks, car_img)
-            # It seems the Car class already calls generate_path internally,
-            # ensure it uses the passed end_extremity or remove the internal call.
-            # Let's assume Car uses the provided final_target_extremity.
+
             self.cars.append(new_car)
 
             self.on_car_spawned(new_car)  # Call the callback for any additional setup

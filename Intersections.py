@@ -154,7 +154,8 @@ class ClassicRoundabout(Intersection):
         for i, _ in enumerate(positions):
             angle = (2 * math.pi / n_cars) * i 
             # Use the center and radius to calculate the point position
-            angle += random.uniform(0, delta_angle*0.8)  # Add some randomness to the angle for more natural spacing
+            if not RING_ROAD:
+                angle += random.uniform(0, delta_angle*0.8)  # Add some randomness to the angle for more natural spacing
             x = self.center.x + self.radius * math.cos(angle)
             y = self.center.y + self.radius * math.sin(angle)
 
