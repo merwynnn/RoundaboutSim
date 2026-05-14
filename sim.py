@@ -422,18 +422,18 @@ def plot_stability_map(alpha, n, resolution=20):
         plt.subplot(2, 3, 5) # Position 5
         im4 = plt.imshow(completion_time_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                         origin='lower', aspect='auto', cmap='cool')
-        plt.colorbar(im4, label='Completion Time (s)')
+        plt.colorbar(im4, label='Durée de parcours moyen (s))')
         plt.xlabel('beta')
         plt.ylabel('gamma')
         plt.title('Average Completion Time')
 
         plt.subplot(2, 3, 6) # Position 6
-        im4 = plt.imshow(np.log10(completion_time_grid), extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
+        im4 = plt.imshow((28-completion_time_grid)/28, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                         origin='lower', aspect='auto', cmap='cool')
-        plt.colorbar(im4, label='Log (Temps de complétion moyen (s))')
+        plt.colorbar(im4, label='Taux de congestion moyen')
         plt.xlabel('beta')
         plt.ylabel('gamma')
-        plt.title('Temps de complétion moyen')
+        plt.title('Taux de congestion moyen')
 
     # Final layout adjustments and single show call
     plt.tight_layout()
