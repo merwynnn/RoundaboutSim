@@ -18,7 +18,7 @@ NUMBER_OF_CARS = 27 #40
 
 ROUNDABOUT_RADIUS = 100 #320  # in meters, 90
 
-MIN_SIMULATION_TIME = 1000  # in seconds
+MIN_SIMULATION_TIME = 600  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
@@ -55,7 +55,7 @@ RENDER = False  # Whether to render the simulation or not. Set to False for fast
 
 RING_ROAD = True   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 10
+RESOLUTION = 5
 
 
 ##### Degraded Mode Parameters #####
