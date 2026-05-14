@@ -18,7 +18,7 @@ NUMBER_OF_CARS = 27 #40
 
 ROUNDABOUT_RADIUS = 100 #320  # in meters, 90
 
-MIN_SIMULATION_TIME = 800  # in seconds
+MIN_SIMULATION_TIME = 1000  # in seconds
 
 MAX_SPEED = 70 / 3.6  # m/s, convert from km/h
 
@@ -81,7 +81,7 @@ ROUNDABOUT_RESOLUTION = 80  # Number of points to represent the roundabout circl
 # pixel per meter at zoom level 1.0
 PIXEL_PER_METER = BASE_CAR_LENGTH / REAL_CAR_LENGTH
 
-DT = 0.1 if not RENDER else 0.02  # seconds per simulation step
+DT = 0.02 if not RENDER else 0.02  # seconds per simulation step
 
 EPSILON = 1e-8
 

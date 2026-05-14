@@ -272,7 +272,7 @@ class Car:
             self.distance_to_obstacle = distance_to_obstacle
             if distance_to_obstacle<self.critical_distance:  # Collision imminent
                 self.acceleration = 0
-                new_speed = obstacle.speed * 0.7
+                new_speed = obstacle.speed * 0.5
                 if new_speed < self.speed:
                     self.speed = new_speed
                 return 
