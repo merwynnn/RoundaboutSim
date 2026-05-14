@@ -55,7 +55,7 @@ RENDER = False  # Whether to render the simulation or not. Set to False for fast
 
 RING_ROAD = True   # Whether to use a ring road setup or a circular road setup.
 
-RESOLUTION = 1
+RESOLUTION = 10
 
 
 ##### Degraded Mode Parameters #####
