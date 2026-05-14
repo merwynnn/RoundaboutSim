@@ -33,9 +33,9 @@ BETA_INTERVAL = [0.01, 0.5]
 
 GAMMA_INTERVAL = [0.01, 0.5] 
 
-BETA_INTERVAL = [0.33]*2
+# BETA_INTERVAL = [0.33]*2
 
-GAMMA_INTERVAL = [0.33]*2
+# GAMMA_INTERVAL = [0.33]*2
 
 """
 # Configuration "confort" non stable
