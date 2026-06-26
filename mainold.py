@@ -31,7 +31,7 @@ def create_ring_road_setup(n):
     radius = 300
 
     directions = [Vec2(1, 0).rotate(i * 360 / n) for i in range(n)]
-    ring_road = ClassicRoundabout((0, 0), radius, directions)
+    ring_road = RingRoad((0, 0), radius, directions)
 
     # Lists to hold the road extremities and roads
     road_extremity_spawners = []
@@ -87,7 +87,7 @@ def create_grid_setup(n, m):
             pos_y = (i * spacing_between_centers) + spacing_between_centers
             pos = (int(pos_x), int(pos_y))
             intersections.append(
-                ClassicRoundabout(
+                RingRoad(
                     pos, roundabout_radius,
                     [Vec2(-1, 0),
                      Vec2(1, 0),
@@ -260,7 +260,7 @@ while True:
                 tick = 0
             elif event.key == pygame.K_3:
                 intersections = [
-                    ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS * 5, [])
+                    RingRoad((0, 0), ROUNDABOUT_RADIUS * 5, [])
                 ]
                 roads = []
                 road_extremity_spawners = []

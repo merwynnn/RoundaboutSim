@@ -41,9 +41,9 @@ class RoadExtremity:
                 self.timer = 0
 
     def get_start_car_pos_dir(self, delta=0):
-        if self.road.start_extremity is self:
+        if self.road.start_extremity is self:                                                                                                                   # type: ignore
             return self.road.lanes_start_end_position[0][0].copy(
-            ) + self.road.dir * delta, self.road.dir
+            ) + self.road.dir * delta, self.road.dir            
         else:
             return self.road.lanes_start_end_position[1][0].copy(
             ) - self.road.dir * delta, -self.road.dir
@@ -59,7 +59,6 @@ class RoadExtremity:
     def get_other_extremity(self):
         if self.road.start_extremity is self:
             return self.road.end_extremity
-
         else:
             return self.road.start_extremity
 
@@ -80,24 +79,21 @@ class Road:
         self.length = (self.end_extremity.pos -
                        self.start_extremity.pos).length()
 
-        self.nb_lanes = 2
+        self.nb_lanes = 1
 
         self.dir = self.end_extremity.pos - self.start_extremity.pos
         self.dir = self.dir.normalize()
         self.dir_orth = Vec2(-self.dir.y, self.dir.x)
 
-        pos_delta = self.dir_orth * LANE_WIDTH / 2
-
-        self.lanes_start_end_position = [(self.start_extremity.pos + pos_delta,
-                                          self.end_extremity.pos + pos_delta),
-                                         (self.end_extremity.pos - pos_delta,
-                                          self.start_extremity.pos - pos_delta)
+        self.lanes_start_end_position = [(self.start_extremity.pos,
+                                          self.end_extremity.pos),
+                                         (self.end_extremity.pos,
+                                          self.start_extremity.pos)
                                          ]
 
     def draw(self, win):
 
-        delta = self.dir_orth * (self.nb_lanes / 2 +
-                                 (self.nb_lanes % 2) / 2) * LANE_WIDTH
+        delta = self.dir_orth * (self.nb_lanes / 2) * LANE_WIDTH * 1.2
 
         # main polygon
         p1_transformed = self.simulator.camera.apply(self.start_extremity.pos -
@@ -159,7 +155,7 @@ class Road:
             pygame.draw.line(
                 win, (255, 255, 255), p1_stripe_transformed,
                 p2_stripe_transformed, int(to_pixel(
-                    STRIPE_WIDTH)))  # STRIPE_WIDTH will be scaled later
+                    STRIPE_WIDTH)))
 
     def update(self, dt):
         pass

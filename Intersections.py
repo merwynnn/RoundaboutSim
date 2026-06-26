@@ -6,56 +6,27 @@ from pygame import Vector2 as Vec2
 from Constants import *
 from Road import RoadExtremity
 import math
-class Intersection:
-    def __init__(self, pos):
+
+class RingRoad:
+    def __init__(self, pos, radius, exits_dir):
         self.pos = Vec2(pos)
         from Simulator import Simulator
         self.simulator = Simulator.get_instance()
         self.exits = []
 
-        self.min_detection_range = REAL_CAR_LENGTH*1.5
         self.detection_angle_threshold = 50
         self.detection_rotation_angle = 0
-        
 
-    def update(self, dt):
-        pass
-    
-    def can_car_enter(self, car):
-        """
-        Parent method to check if a car can enter the intersection. Should be overridden by subclasses.
-        Returns True if the car can enter, False otherwise.
-        """
-        return True
 
-    def draw(self, win):
-        pass
-
-    def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
-        #return next_target_pos, is_last_pos
-        pass
-        
-class ClassicRoundabout(Intersection):
-    def __init__(self, pos, radius, exits_dir):
-        super().__init__(pos)
         self.radius = radius
         self.center = Vec2(pos)
         self.nb_lanes = 1
         
-
-        # Increased from 3 to 4 to look further ahead for congestion before entering the roundabout.
-        self.nb_target_to_check_before_enter = 4
-
-        self.speed_enter_threshold = 1.0 # m/s, cars moving slower than this are considered "slow" when checking if a car can enter the roundabout
-
         self.exits = []
         for exit_dir in exits_dir:
             self.exits.append(RoadExtremity((self.center.x + self.radius * exit_dir.x, self.center.y + self.radius * exit_dir.y), self))
 
-        # Increased number of points from 14 to 20 for a smoother path around the roundabout.
         self.targets = self.get_evenly_spaced_points(ROUNDABOUT_RESOLUTION)[::-1]
-
-        self.cars_between_targets = [[] for _ in self.targets]   # 0: between 0 and 1, 1: between 1 and 2, etc.
 
     def draw(self, win):
         transformed_center = self.simulator.camera.apply(self.center)
@@ -93,13 +64,13 @@ class ClassicRoundabout(Intersection):
         
         for i in range(n_points):
             angle = (2 * math.pi / n_points) * i
-            # Use the center and radius to calculate the point position
             x = self.center.x + radius * math.cos(angle)
             y = self.center.y + radius * math.sin(angle)
             points.append(Vec2(x, y))
         return points
     
-    def closest_target(self, pos, dir=None):
+    def get_closest_target(self, pos, dir=None):
+        """ Returns the index of the closest target to the given position, optionally considering only targets in the direction of 'dir' """
         min_dist = math.inf
         closest_target_id = None
         for id, target in enumerate(self.targets):
@@ -121,45 +92,25 @@ class ClassicRoundabout(Intersection):
         return i%len(self.targets)
 
     def get_next_target_position(self, start_extremity, exit_extremity, current_target_index, car=None):
-        """ returns the position of the current_target_index based on an extremity """
-        start_target_index = self.get_index(self.closest_target(start_extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)
-        exit_target_index = self.get_index(self.closest_target(exit_extremity.get_start_car_pos_dir()[0])-1)
+        """ returns the position of the next target for a car, based on the current_target_index (which is the index of the last target reached by the car) """
+        start_target_index = self.get_index(selfget_closest_target(start_extremity.get_other_extremity().get_end_car_pos_dir()[0])+1)
+        exit_target_index = self.get_index(selfget_closest_target(exit_extremity.get_start_car_pos_dir()[0])-1)
         target_index = self.get_index(start_target_index+current_target_index)
-        if car:
-            btw_index = self.get_index(target_index-1)
-            if car in self.cars_between_targets[self.get_index(btw_index-1)]:
-                self.cars_between_targets[self.get_index(btw_index-1)].remove(car)
-            if target_index != exit_target_index:
-                self.cars_between_targets[btw_index].append(car)
         return self.targets[target_index], exit_target_index == target_index
-    
-    def can_car_enter(self, extremity):
-        """
-        Returns True if there is enough space for the car to enter the roundabout (no car within min_distance meters).
-        """
-        start_target_index = self.get_index(self.closest_target(extremity.get_other_extremity().get_end_car_pos_dir()[0])+2)
-        for i in range(self.nb_target_to_check_before_enter):
-            btw_index = self.get_index(start_target_index - i - 1)
-            if self.cars_between_targets[btw_index]:
-                # Check for slow-moving cars in critical segments
-                for car_in_segment in self.cars_between_targets[btw_index]:
-                    if car_in_segment.speed > self.speed_enter_threshold or i < 2: # Speed threshold
-                        return False 
-                    
-        return True
+
     
     def spawn_evenly_spaced_cars(self, n_cars):
+        """ Spawns n_cars evenly spaced on the roundabout, with random perturbations """
         positions = self.get_evenly_spaced_points(n_cars)
         delta_angle = 2 * math.pi / n_cars
         for i, _ in enumerate(positions):
             angle = (2 * math.pi / n_cars) * i 
-            # Use the center and radius to calculate the point position
             if not RING_ROAD:
-                angle += random.uniform(0, delta_angle*0.8)  # Add some randomness to the angle for more natural spacing
+                angle += random.uniform(0, delta_angle*0.8)  # Add some randomness to the angle to avoid perfect spacing (creates a tiny perturbation)
             x = self.center.x + self.radius * math.cos(angle)
             y = self.center.y + self.radius * math.sin(angle)
 
             pos = Vec2(x, y)
             car_dir = Vec2(math.sin(angle), -math.cos(angle))  # Tangential direction
-            index = self.get_index(self.closest_target(pos, car_dir))
+            index = self.get_index(selfget_closest_target(pos, car_dir))
             self.simulator.spawn_car_at_position(pos, car_dir, intersection=self, target_position=self.targets[index], target_index = index)

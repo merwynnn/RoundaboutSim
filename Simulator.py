@@ -12,35 +12,13 @@ import os
 
 
 class Simulator:
-    _instance = None
-
-    def _preload_car_images(self):
-        """Preload and scale all car images once. Returns a list of surfaces."""
-        assets_dir = "Assets"
-        images = []
-        if os.path.isdir(assets_dir):
-            for fname in os.listdir(assets_dir):
-                fpath = os.path.join(assets_dir, fname)
-                try:
-                    img = pygame.image.load(fpath)
-                    img = pygame.transform.scale(img, (40, 40))
-                    images.append(img)
-                except Exception as e:
-                    print(f"Warning: Could not load car image {fpath}: {e}")
-        if not images:
-            # Fallback: create a dummy surface
-            img = pygame.Surface((int(40 / 8), int(40 / 8)))
-            img.fill((255, 0, 0))
-            images.append(img)
-        return images
-
     def __init__(self, win=None, use_gui=True, on_car_spawned=lambda car: None):
         Simulator._instance = self
         self.use_gui = use_gui
         self.win = win if self.use_gui else None
 
-        from Constants import WIDTH, HEIGHT  # Make sure WIDTH and HEIGHT are imported
-        self.camera = Camera(WIDTH, HEIGHT)  # Added
+        self.camera = Camera(WIDTH, HEIGHT)
+
         # Preload car images once
         self.preloaded_car_images = self._preload_car_images()
 
@@ -70,44 +48,16 @@ class Simulator:
         self.energy_consumption = 0
 
         self.on_car_spawned = on_car_spawned  # can be set externally for custom behavior on car spawn
-
     def get_average_completion_time(self):
         if not self.completion_times:
             return 0
         return sum(self.completion_times) / len(self.completion_times)
-
     def get_car_density(self):
         return len(self.cars)
-
-    def get_entry_flow_rate(self):
-        total_interval = 0
-        spawner_count = 0
-        for spawner in self.road_extremity_spawners:
-            if spawner.spawn_cars:
-                total_interval += spawner.spawn_cars_timer
-                spawner_count += 1
-        if spawner_count == 0:
-            return 0
-        avg_interval = total_interval / spawner_count
-        return 1 / avg_interval if avg_interval > 0 else 0
-
-    def get_real_entry_flow_rate(self):
-        return self.total_cars_spawned_count / self.total_ticks
-
-    def get_exit_flow_rate(self):
-        return self.last_exit_flow_rate
-
     def get_mean_car_density(self):
         if not self.car_density_history:
             return 0
         return sum(self.car_density_history) / len(self.car_density_history)
-
-    def get_mean_real_entry_flow_rate(self):
-        if not self.real_entry_flow_rate_history:
-            return 0
-        return sum(self.real_entry_flow_rate_history) / len(
-            self.real_entry_flow_rate_history)
-
     def initialize(self,
                    intersections=None,
                    roads=None,
@@ -120,7 +70,6 @@ class Simulator:
         self.car_density_history = []
         self.real_entry_flow_rate_history = []
 
-        # --- Your existing setup code ---
         self.intersections = intersections if intersections is not None else []
         self.roads = roads if roads is not None else []
         self.road_extremity_spawners = road_extremity_spawners if road_extremity_spawners is not None else []
@@ -151,31 +100,11 @@ class Simulator:
 
         self.energy_consumption = 0
 
-    @classmethod
-    def get_instance(cls):
-        return cls._instance
-
     def update(self, dt, events):
         if not self.initialized:
             return
 
         self.total_ticks += 1
-
-        self.car_density_history.append(self.get_car_density())
-        if self.total_ticks > 0:
-            self.real_entry_flow_rate_history.append(self.get_exit_flow_rate())
-
-        if self.total_ticks % 20 == 0:  # Every 20 ticks
-            for i in range(len(self.cars_exited_tick_during_delta)):
-                if self.cars_exited_tick_during_delta[
-                        0] < self.total_ticks - self.flow_rate_time_delta:
-                    self.cars_exited_tick_during_delta.pop(0)
-                else:
-                    break
-
-            self.last_exit_flow_rate = len(
-                self.cars_exited_tick_during_delta) / self.flow_rate_time_delta
-            self.exit_flow_rate_history.append(self.last_exit_flow_rate)
 
         # Update simulation logic
         for road in self.roads:
@@ -184,7 +113,8 @@ class Simulator:
             intersection.update(dt)
         for car in list(self.cars):
             car.move(dt)
-            self.energy_consumption += CAR_WEIGHT * max(car.acceleration, 0) * car.speed * dt  # energy consumption
+            # Computes energy consumption
+            self.energy_consumption += CAR_WEIGHT * max(car.acceleration, 0) * car.speed * dt  
 
         for road_extremity in self.road_extremity_spawners:
             road_extremity.update(dt)
@@ -193,35 +123,7 @@ class Simulator:
             return
 
         # --- Handle GUI (events, rendering) ---
-        for event in events:
-            self.camera.handle_event(event)  # Added
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_d:
-                    self.debug = not self.debug  # Toggle debug mode
-                if event.key == pygame.K_r:
-                    self.render_as_rect = not self.render_as_rect
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:  # Left click
-                    world_mouse_pos = self.camera.screen_to_world(
-                        pygame.math.Vector2(event.pos))  # Added
-                    clicked_car = None
-                    for car in self.cars:
-                        if car.handle_click(
-                                world_mouse_pos
-                        ):  # Modified to use world_mouse_pos
-                            clicked_car = car
-                            break  # Found a clicked car, no need to check others
-
-                    # Deselect the previously selected car
-                    if self.selected_car:
-                        self.selected_car.selected = False
-
-                    # Select the clicked car if any
-                    self.selected_car = clicked_car
-                    if self.selected_car:
-                        self.selected_car.selected = True
-
-        self.win.fill(BACKGROUND_COLOR)
+        #...
 
         for road in self.roads:
             road.draw(self.win)
@@ -271,7 +173,7 @@ class Simulator:
                                len(self.exit_flow_rate_history)) if len(
                                    self.exit_flow_rate_history) > 0 else 0
         debug_info = [
-            f"Total time: {self.total_ticks*0.1:.1f}s",
+            f"Total time: {self.total_ticks*DT:.1f}s",
             f"Mean speed: {sum(car.speed for car in self.cars)/len(self.cars)*3.6:.2f} km/h" if self.cars else "Mean speed: N/A",
             f"Average completion time: {self.get_average_completion_time():.2f}s",
         ]
@@ -304,26 +206,18 @@ class Simulator:
         return path
 
     def car_reached_destination(self, car):
-        # Check if the car object exists in the list before attempting removal
         if car in self.cars:
             self.total_cars_exited += 1
             self.cars_exited_tick_during_delta.append(self.total_ticks)
-
             self.cars.remove(car)
+
+            #Computes car crossing time
             lifetime_ticks = self.total_ticks - car.creation_tick
             lifetime_seconds = lifetime_ticks * DT
-            #print(f"Car lifetime: {lifetime_seconds:.2f} seconds")
             self.completion_times.append(lifetime_seconds)
-        # Optional: Clean up the car object if necessary (Python's garbage collector usually handles this)
-        # del car
-        # print("Car reached destination and was removed.") # For debugging
 
     def spawn_car(self, start_extremity):
         self.total_cars_spawned_count += 1
-
-        # Randomly select an end extremity from the list of exits
-        #end_extremity = random.choice(self.road_extremity_exits)
-
 
         # Makes sure only the furthest exit is selected
         end_extremity = self.road_extremity_exits[0] if (self.road_extremity_exits[0].pos - start_extremity.pos).length() < (self.road_extremity_exits[1].pos - start_extremity.pos).length() else self.road_extremity_exits[1]
@@ -343,7 +237,6 @@ class Simulator:
             self.on_car_spawned(new_car)  # Call the callback for any additional setup
 
             return new_car
-            # print(f"Spawned car from {start_extremity.pos} to {end_extremity.pos}") # For debugging
         else:
             print(
                 f"Warning: Could not generate path for new car from {start_extremity.pos} to {end_extremity.pos}. Car not spawned."
@@ -369,7 +262,7 @@ class Simulator:
         dummy_extremity.intersection = intersection
 
         new_car.last_extremity = dummy_extremity  # Assign to an arbitrary exit for now
-        new_car.status = "INTERSECTION"
+        new_car.status = "IN_RING_ROAD"
 
         self.cars.append(new_car)
 

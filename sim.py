@@ -20,7 +20,7 @@ print("start")
 pygame.init()
 
 
-win = pygame.display.set_mode((WIDTH, HEIGHT)) if RENDER else None
+win = pygame.display.set_mode((0, 0), flags=pygame.RESIZABLE) if RENDER else None
 pygame.display.set_caption("Roundabout Simulator")
 
 clock = pygame.time.Clock()
@@ -34,7 +34,7 @@ def create_ring_road_setup(n):
     fixed_road_length = 70
 
     directions = [Vec2(1, 0).rotate(i * 360 / n) for i in range(n)]
-    ring_road = ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, directions)
+    ring_road = RingRoad((0, 0), ROUNDABOUT_RADIUS, directions)
 
     # Lists to hold the road extremities and roads
     road_extremity_spawners = []
@@ -72,28 +72,14 @@ def create_ring_road_setup(n):
 
     return intersections, roads, road_extremity_spawners, road_extremity_exits
 
-"""
-intersections, roads, road_extremity_spawners, road_extremity_exits = create_ring_road_setup(
-        8)
-    simulator.initialize(intersections,
-                        roads,
-                        road_extremity_spawners,
-                        car_spawn_interval=car_spawn_interval,
-                        road_extremity_exits=road_extremity_exits)
-"""
 
 
+def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_min,
+                                      degraded_mode=False, optimized_car_rate=1):
+    pred_ok, valeurs_propres, min_vp = predict(alpha, beta, gamma, n)
+    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta},gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_min={vp_min:.2f}, dt: {DT}----------------")
 
-
-
-
-def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, degraded_mode=False, optimized_car_rate=1):
-    pred_ok, valeurs_propres, max_vp = predict(alpha, beta, gamma, n)
-    print(f"-----------Starting simulation with parameters: alpha={alpha}, beta={beta}, gamma={gamma}, n={n}, pred_ok={pred_ok}, vp_max={vp_max:.2f}, dt: {DT}----------------")
-
-
-    predicted_simulation_time = max(MIN_SIMULATION_TIME, abs(math.log(2)/max_vp*3))
-    print("predicted_sim_time", predicted_simulation_time)
+    predicted_simulation_time = max(MIN_SIMULATION_TIME, 3*abs(1/min_vp))
 
     def on_car_spawned(car):
         if degraded_mode:
@@ -115,34 +101,22 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             car.gamma = gamma
 
         if not RING_ROAD:
-            car.speed = car.max_speed / 2  # Start at half of max speed to avoid initial congestion
+            car.speed = car.max_speed / 2  # Start at half of max speed
 
     simulator = Simulator(win, use_gui=RENDER, on_car_spawned=on_car_spawned)
 
     if RING_ROAD:
         intersections, roads, road_extremity_spawners, road_extremity_exits = create_ring_road_setup(4)
     else:
-        intersections = [
-                            ClassicRoundabout((0, 0), ROUNDABOUT_RADIUS, [])
-                        ]
-
-        roads = []
-
-        road_extremity_spawners = []
-
-        road_extremity_exits = []
-
-
-
+        intersections = [RingRoad((0, 0), ROUNDABOUT_RADIUS, []) ]
+        roads,road_extremity_spawners,road_extremity_exits = [], [], []
     simulator.initialize(intersections,
                             roads,
                             road_extremity_spawners,
                             road_extremity_exits=road_extremity_exits,
                             car_spawn_interval=CAR_SPAWN_INTERVAL,)  
-
     intersections[0].spawn_evenly_spaced_cars(n)
-
-    optimized_car = 0
+    nb_optimized_car = 0
 
     if degraded_mode and not RING_ROAD:
         num_cars = len(simulator.cars)
@@ -154,69 +128,37 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             optimized_indices = {int(k * num_cars / target_optimized) for k in range(target_optimized)}
         else:
             optimized_indices = set()
-
         for i, car in enumerate(simulator.cars):
             if i in optimized_indices:
                 car.alpha, car.beta, car.gamma = ALPHA_FLUID, BETA_FLUID, GAMMA_FLUID
-                optimized_car += 1
+                nb_optimized_car += 1
             else:
                 car.alpha, car.beta, car.gamma = ALPHA_CONGESTED, BETA_CONGESTED, GAMMA_CONGESTED
-
-        print(f"Degraded mode with {optimized_car} optimized cars out of {NUMBER_OF_CARS} total cars ({optimized_car_rate*100:.1f}%)")
+        print(f"Degraded mode with {nb_optimized_car} optimized cars out of {NUMBER_OF_CARS} total cars ({optimized_car_rate*100:.1f}%)")
 
 
     time_multiplier = 1
-
     tick = 0
-
     total_time = 0
-
     max_acceleration = 0
     min_acceleration = 0
-
     congested = False
-    
     total_cars_in_ring_road = 0
     max_cars_in_ring_road = 0
-
     PAUSE = False
 
     while True:
         min_distance_between_cars = math.inf
-        events = pygame.event.get()
-
-        for event in events:
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
-                    PAUSE = not PAUSE
-                    print("PAUSE" if PAUSE else "RESUME")
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_UP:
-                    time_multiplier = min(8.0, time_multiplier * 2)
-                elif event.key == pygame.K_DOWN:
-                    time_multiplier = max(0.01, time_multiplier / 2)
-
-
-        if PAUSE:
-            continue
-
+    
         tick += 1
         dt = DT * time_multiplier
         total_time += dt
-
 
         if 5<= total_time <= 6:
             simulator.cars[0].speed = 0
 
         if simulator:
             simulator.update(dt, events)
-
-
-        congested_cars = 0
 
         cars_in_ring_road = 0
 
@@ -226,69 +168,42 @@ def start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, vp_max, deg
             if car.acceleration < min_acceleration:
                 min_acceleration = car.acceleration
 
-            if car.status == "INTERSECTION":
+            if car.status == "IN_RING_ROAD":
                 cars_in_ring_road += 1
                 total_cars_in_ring_road += 1
 
             if car.distance_to_obstacle < min_distance_between_cars:
                 min_distance_between_cars = car.distance_to_obstacle
-
-            """if car.next_car:
-                if (car.pos - car.next_car.pos).length() < 5:
-                    print(f"Car at {car.pos} is too close to the next car at {car.next_car.pos} with speed {car.speed:.2f}")
-                    print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-                    return False, simulator.energy_consumption/total_time, max_acceleration, min_acceleration"""
-
-            """if car.speed < 0.9*car.max_speed and car.status == "INTERSECTION":
-                #congested = True
-                congested_cars += 1"""
            
-       
-       
         if len(simulator.cars) > 0 and total_time > predicted_simulation_time*0.9:
-            if min_distance_between_cars < 0.85 * 2*ROUNDABOUT_RADIUS*math.pi / n :        # if the minimum distance between cars is less than 2 meters, we consider the traffic congested
-                # print("congested", f"Min distance between cars: {min_distance_between_cars:.2f} m", "distance threshold: ", 0.95 * 2*ROUNDABOUT_RADIUS*math.pi / n)
+            if min_distance_between_cars < 0.9 * 2*ROUNDABOUT_RADIUS*math.pi / n :        # Our congestion detection criterion
                 congested = True
-
-            """if car.speed < 0:
-                print(f"Wrong way : Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
-                return False, simulator.energy_consumption, max_acceleration, min_acceleration"""
            
         # Update the maximum number of cars in the ring road
         if cars_in_ring_road > max_cars_in_ring_road:
             max_cars_in_ring_road = cars_in_ring_road
 
         if total_time >= predicted_simulation_time:
-            print(congested,pred_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp" , max_vp)
+            print(congested,pred_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "min_vp" , min_vp)
             print(f"Max acceleration: {max_acceleration:.2f}, Min acceleration: {min_acceleration:.2f}")
             print(f"Max cars in ring road: {max_cars_in_ring_road}, Mean cars in ring road: {total_cars_in_ring_road/tick}")
 
             average_completion_time = simulator.get_average_completion_time() if RING_ROAD else 0
 
             print(f"Average completion time: {average_completion_time:.2f}")
-            return not congested, simulator.energy_consumption/predicted_simulation_time, max_acceleration, min_acceleration, average_completion_time
+            return not congested, simulator.energy_consumption/predicted_simulation_time,
+              max_acceleration, min_acceleration, average_completion_time
        
         if tick % 8000 == 0:
             print(f"time: {total_time}")
 
-
-
-        # Display FPS
         if RENDER:
             clock.tick()
-            fps = clock.get_fps()
-            fps_text = font.render(f"FPS: {int(fps)}", True,
-
-                                (255, 255, 255))  # White color
-            win.blit(fps_text, (10, 10))  # Position at top-left
-
-            pred_text = font.render(f"Prediction: {'OK' if pred_ok else 'NOT OK'}, Max VP: {vp_max}", True, (255, 255, 255))
-            win.blit(pred_text, (10, 40))
 
             pygame.display.update()
 
 def predict(alpha, beta, gamma, n):
-
+    """Predict whether the system will be stable or not based on the eigenvalues of B."""
     A = np.zeros((n, n))
 
     for i in range(n - 1):
@@ -304,22 +219,20 @@ def predict(alpha, beta, gamma, n):
     B[n:,n:] = -beta*np.eye(n)+gamma*A
     valeurs_propres, vecteurs_propres = np.linalg.eig(B)
 
-    #print("Valeurs propres :", valeurs_propres)
-
-    max_vp = -math.inf
+    min_vp = math.inf
     for vp in valeurs_propres.real:
-        if vp > max_vp and not (-1e-10 < vp < 1e-10):
-            max_vp = vp
+        if abs(vp) < min_vp and not (-1e-10 < vp < 1e-10):
+            min_vp = abs(vp)
 
 
     # On cherche à savoir si toutes valeurs_propres ont une partie réelle négative ou nulle (stabilité)
-    if np.any(valeurs_propres.real - EPSILON > 0):     # On soustrait un petit epsilon pour éviter les problèmes de précision numérique (valeurs propres nulles pouvant être légèrement positives à cause de la précision)
-        return False, valeurs_propres, max_vp
-    return True, valeurs_propres, max_vp
+    # On soustrait un petit epsilon pour éviter les problèmes de précision numérique
+    # (valeurs propres nulles pouvant être légèrement positives à cause de la précision)
+    if np.any(valeurs_propres.real - EPSILON > 0):     
+        return False, valeurs_propres, min_vp
+    return True, valeurs_propres, min_vp
 
 
-import numpy as np
-import matplotlib.pyplot as plt
 
 def plot_stability_map(alpha, n, resolution=20):
     gammas = np.linspace(GAMMA_INTERVAL[0], GAMMA_INTERVAL[1], resolution)
@@ -330,7 +243,6 @@ def plot_stability_map(alpha, n, resolution=20):
     accelerations_min_grid = np.zeros((resolution, resolution))
     completion_time_grid = np.zeros((resolution, resolution))
 
-    # 1. Create one single large figure
     if RING_ROAD:
         plt.figure(figsize=(22, 10))
     else:
@@ -342,24 +254,25 @@ def plot_stability_map(alpha, n, resolution=20):
         results = []
         for g_idx, gamma in enumerate(gammas):
             for b_idx, beta in enumerate(betas):
-                pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
-                sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, max_vp)
+                pred_ok, vp, min_vp = predict(alpha, beta, gamma, n)
+                sim_ok, energy_consumption, max_deceleration, min_deceleration, 
+                    average_completion_time = start_simulation_with_parameters(alpha, beta, gamma, n, pred_ok, min_vp)
                 results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time))
     else:
         with Pool(2) as pool:
             results = pool.starmap(start_simulation_with_parameters, inputs_parallels)
 
-    # --- Data Processing and Plot 1 (Stability Scatter) ---
+    # --- Plot 1  ---
 
     plt.subplot(2, 3, 1)
     i = 0
     for g_idx, gamma in enumerate(gammas):
         for b_idx, beta in enumerate(betas):
             sim_ok, energy_consumption, max_deceleration, min_deceleration, average_completion_time = results[i]
-            pred_ok, vp, max_vp = predict(alpha, beta, gamma, n)
+            pred_ok, vp, min_vp = predict(alpha, beta, gamma, n)
 
 
-            print("Temps caractéristique : ", math.log(2)/max_vp, pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "max_vp: ", max_vp, "dt: ", DT, "max_vp_mod=",np.max(np.abs(vp)), "average_completion_time: ", average_completion_time)
+            print("Temps caractéristique : ", math.log(2)/min_vp, pred_ok == sim_ok, "alpha:", alpha, "beta:", beta, "gamma:", gamma, "min_vp: ", min_vp, "dt: ", DT, "min_vp_mod=",np.max(np.abs(vp)), "average_completion_time: ", average_completion_time)
             
             
             energy_grid[g_idx, b_idx] = energy_consumption
@@ -373,14 +286,6 @@ def plot_stability_map(alpha, n, resolution=20):
 
             plt.scatter(beta, gamma, c=color, marker=marker, s=40)
             i += 1
-           
-
-    current_date =  datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-    with open(f"Data/energy_grid_{current_date}.txt", "w") as f:
-        f.write(f"Energy grid for alpha={alpha}, gammas={GAMMA_INTERVAL}, betas={BETA_INTERVAL}\n, n={n}\n, resolution={resolution}\n")
-        f.write(str(energy_grid))
-
-
 
     plt.xlabel('beta')
     plt.ylabel('gamma')
@@ -388,8 +293,8 @@ def plot_stability_map(alpha, n, resolution=20):
 
 
 
-    # --- Plot 3: Energy vs Beta Line Plot ---
-    plt.subplot(2, 3, 2) # Position 2
+    # --- Plot 2: Energy Heatmap ----
+    plt.subplot(2, 3, 2)
     im1 = plt.imshow(energy_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='viridis')
     plt.colorbar(im1, label='Consommation énergétique moyenne (W)')
@@ -399,7 +304,7 @@ def plot_stability_map(alpha, n, resolution=20):
 
     # --- Plot 4: Max Acceleration Heatmap ---
 
-    plt.subplot(2, 3, 3) # Position 3
+    plt.subplot(2, 3, 3)
     im2 = plt.imshow(accelerations_max_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
                     origin='lower', aspect='auto', cmap='magma')
     plt.colorbar(im2, label='Max Accel')
@@ -417,7 +322,7 @@ def plot_stability_map(alpha, n, resolution=20):
     plt.ylabel('gamma')
     plt.title('Max Deceleration')
 
-    # --- Plot 6: Completion Time Heatmap (only if RING_ROAD) ---
+    # --- Plot 6: Completion Time Heatmap ---
     if RING_ROAD:
         plt.subplot(2, 3, 5) # Position 5
         im4 = plt.imshow(completion_time_grid, extent=[betas[0], betas[-1], gammas[0], gammas[-1]],
@@ -435,7 +340,6 @@ def plot_stability_map(alpha, n, resolution=20):
         plt.ylabel('gamma')
         plt.title('Taux de congestion moyen')
 
-    # Final layout adjustments and single show call
     plt.savefig('results.png')
     print("Plot saved to results.png")
 
@@ -446,9 +350,9 @@ def plot_car_optimization_percentage_map(n, resolution=10):
     optimized_car_rates = np.linspace(0, 1, resolution)
     results = []
     for rate in optimized_car_rates:
-        sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(ALPHA_FLUID, BETA_FLUID, GAMMA_FLUID, n, False, 0, degraded_mode=True, optimized_car_rate=rate)
+        sim_ok, energy_consumption, max_deceleration, min_deceleration = start_simulation_with_parameters(ALPHA_FLUID, 
+                            BETA_FLUID, GAMMA_FLUID, n, False, 0, degraded_mode=True, optimized_car_rate=rate)
         results.append((sim_ok, energy_consumption, max_deceleration, min_deceleration))
-        print(f"Optimized car rate: {rate:.2f}, Simulation OK: {sim_ok}, Energy: {energy_consumption:.2f}, Max Decel: {max_deceleration:.2f}, Min Decel: {min_deceleration:.2f}")
 
     sim_status = [int(r[0]) for r in results]
     energy_vals = [r[1] for r in results]
@@ -472,7 +376,7 @@ def plot_car_optimization_percentage_map(n, resolution=10):
     ax2.set_title('Consommation énergétique vs. Taux de véhicules optimisés', fontsize=14)
     ax2.grid(True, linestyle='--', alpha=0.7)
 
-    # Optional: Highlight the "Fail" zones on the energy plot for context
+    # Highlight the "Fail" zones on the energy plot
     for i in range(len(sim_status)):
         if sim_status[i] == 0:
             ax2.axvspan(optimized_car_rates[i], optimized_car_rates[min(i+1, len(sim_status)-1)],
